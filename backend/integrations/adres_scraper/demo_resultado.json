@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "tipo_documento": "CC",
+  "documento": "1107838406",
+  "nombre": "MARIA FERNANDA",
+  "apellidos": "TELLO VERGARA",
+  "fecha_nacimiento": "**/**/**",
+  "departamento": "VALLE",
+  "municipio": "SANTIAGO DE CALI",
+  "estado": "ACTIVO",
+  "eps": "SALUD TOTAL ENTIDAD PROMOTORA DE SALUD DEL REGIMEN CONTRIBUTIVO Y DEL REGIMEN SUBSIDIADO S.A.",
+  "regimen": "CONTRIBUTIVO",
+  "fecha_afiliacion": "01/01/2023",
+  "tipo_afiliado": "COTIZANTE"
+}

@@ -1,0 +1,56 @@
+{
+  "resourceType": "Medication",
+  "id": "medicamento-enalapril",
+  "code": {
+    "coding": [
+      {
+        "system": "http://www.invima.gov.co/cum",
+        "code": "INVIMA-2019M-0001234",
+        "display": "Enalapril 20 mg tableta"
+      },
+      {
+        "system": "http://www.whocc.no/atc",
+        "code": "C09AA02",
+        "display": "Enalapril"
+      }
+    ],
+    "text": "Enalapril 20 mg Tableta"
+  },
+  "status": "active",
+  "manufacturer": {
+    "display": "Farmacéuticos Colombianos S.A."
+  },
+  "form": {
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v3-orderableDrugForm",
+        "code": "TAB",
+        "display": "Tablet"
+      }
+    ]
+  },
+  "ingredient": [
+    {
+      "itemCodeableConcept": {
+        "coding": [
+          {
+            "system": "http://www.whocc.no/atc",
+            "code": "C09AA02",
+            "display": "Enalapril"
+          }
+        ]
+      },
+      "strength": {
+        "numerator": {
+          "value": 20,
+          "unit": "mg"
+        },
+        "denominator": {
+          "value": 1,
+          "unit": "tableta"
+        }
+      }
+    }
+  ]
+}
+
