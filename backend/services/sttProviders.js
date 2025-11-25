@@ -11,14 +11,20 @@ async function transcribeWithHuggingFace({ audioBuffer, contentType, filename })
     throw new Error('HF_API_TOKEN no está configurado en el servidor');
   }
 
-  const endpoint = `https://router.huggingface.co/${HF_DEFAULT_MODEL}`;
+  // El router de Hugging Face usa el formato /models/{model_name} para modelos de inferencia
+  const endpoint = `https://router.huggingface.co/models/${HF_DEFAULT_MODEL}`;
+  
+  // Para modelos de audio, necesitamos enviar el audio como FormData
+  const form = new FormData();
+  form.append('file', audioBuffer, { filename: filename || 'audio.webm', contentType: contentType || 'audio/webm' });
+  
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
-      'Content-Type': contentType || 'audio/webm'
+      ...form.getHeaders()
     },
-    body: audioBuffer
+    body: form
   });
 
   if (!response.ok) {
