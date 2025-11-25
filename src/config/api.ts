@@ -1,9 +1,9 @@
 /**
  * Configuración centralizada de la API
- * Usa VITE_BACKEND_URL si está definida; por defecto http://localhost:3001
+ * Usa VITE_BACKEND_URL si está definida; por defecto la URL del backend en Render
  */
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://eleven-crews-clap.loca.lt';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://proyecto-salud-digital-2.onrender.com';
 export const API_BASE_URL = `${BACKEND_URL}/api`;
 
 // Log para debugging

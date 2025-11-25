@@ -513,7 +513,7 @@ function InicioView({ currentRole, deviceType, onNavigate }: any) {
                   try {
                     setIsTtsLoading(true);
                     setAudioUrl(null);
-                    const resp = await fetch('https://salud-digital-backend.onrender.com/api/stt',{
+                    const resp = await fetch(`${API_BASE_URL}/tts`,{
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ texto: ttsText })
@@ -578,7 +578,7 @@ function InicioView({ currentRole, deviceType, onNavigate }: any) {
                         // Convertir a mp3 puede no ser posible en navegador; ElevenLabs acepta varios formatos.
                         const form = new FormData();
                         form.append('audio', blob, 'audio.webm');
-                        const resp = await fetch('https://salud-digital-backend.onrender.com/api/tts', { method: 'POST', body: form });
+                        const resp = await fetch(`${API_BASE_URL}/stt`, { method: 'POST', body: form });
                         if (!resp.ok) {
                           let msg = 'Error transcribiendo audio';
                           try {

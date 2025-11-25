@@ -1,4 +1,6 @@
-const API_URL = 'https://salud-digital-backend.onrender.com/api';
+import { API_BASE_URL } from '../config/api';
+
+const API_URL = API_BASE_URL;
 
 interface FhirResponse<T = any> {
   success: boolean;
