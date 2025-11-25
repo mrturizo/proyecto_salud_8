@@ -68,6 +68,11 @@ c. **Cree el archivo de variables de entorno:**
    # API Key de ElevenLabs para las funciones de Speech-to-Text y Text-to-Speech
    ELEVENLABS_API_KEY=tu_api_key_de_elevenlabs
 
+   # Hugging Face Inference API (STT por defecto)
+   HF_API_TOKEN=tu_token_de_huggingface
+   HF_STT_MODEL=openai/whisper-large-v2
+   STT_DEFAULT_PROVIDER=huggingface
+
    # API Key de Apitude para consultar ADRES/BDUA
    # Obtenga su clave en: https://apitude.co
    APITUDE_API_KEY=tu_api_key_de_apitude
@@ -93,6 +98,14 @@ c. **Inicie la aplicación de React:**
    npm run dev
    ```
    La aplicación estará disponible en `http://localhost:5173`.
+
+d. **Variables opcionales (.env.local):**
+   ```env
+   VITE_BACKEND_URL=http://localhost:3001
+   VITE_DEFAULT_STT_PROVIDER=huggingface
+   VITE_ENABLE_TTS=true
+   ```
+   Con estas variables puedes elegir el proveedor de STT predeterminado (Hugging Face vs ElevenLabs) y habilitar/deshabilitar TTS.
 
 ### **3. Configuración del Entorno de IA (Python)**
 

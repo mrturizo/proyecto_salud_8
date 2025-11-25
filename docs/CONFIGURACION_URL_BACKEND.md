@@ -28,6 +28,25 @@ VITE_BACKEND_URL=http://localhost:3001
 BACKEND_URL=http://localhost:3001
 ```
 
+### Variables adicionales para STT/TTS
+
+Backend (`backend/.env`):
+
+```env
+HF_API_TOKEN=tu_token_de_huggingface
+HF_STT_MODEL=openai/whisper-large-v2
+STT_DEFAULT_PROVIDER=huggingface   # huggingface | elevenlabs
+```
+
+Frontend (`.env.local`):
+
+```env
+VITE_DEFAULT_STT_PROVIDER=huggingface
+VITE_ENABLE_TTS=true
+```
+
+Estas variables permiten alternar entre el modelo gratuito de Hugging Face (Whisper) y ElevenLabs. El selector también está disponible dentro de la aplicación.
+
 ---
 
 ## 📁 Archivos de Configuración

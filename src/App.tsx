@@ -8,8 +8,9 @@ import { TerminologyAutocomplete } from "./components/TerminologyAutocomplete";
 import { syncPatient, createCondition, createMedicationRequest, createMedication } from "./services/fhirService";
 import { buildPatientResource, buildConditionResources, buildMedicationRequestResources, buildMedicationResources } from "./utils/fhirMappers";
 import { ConsultarADRESButton } from "./components/ConsultarADRESButton";
-import { API_BASE_URL } from "./config/api";
+import { API_BASE_URL, ENABLE_TTS } from "./config/api";
 import { AntecedentesFamiliares } from "./components/AntecedentesFamiliares";
+import { useSttProvider } from "./contexts/SttProviderContext";
 
 import { 
   User, 
@@ -406,6 +407,11 @@ function InicioView({ currentRole, deviceType, onNavigate }: any) {
   const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
   const audioChunksRef = React.useRef<Blob[]>([]);
   const [transcript, setTranscript] = useState<string>("");
+  const { provider: sttProvider, setProvider: setSttProvider } = useSttProvider();
+  const sttProviderOptions = [
+    { value: 'huggingface', label: 'Hugging Face (Whisper · recomendado)' },
+    { value: 'elevenlabs', label: 'ElevenLabs' }
+  ];
   const [kpis, setKpis] = useState([
     { label: "Registros hoy", value: 0, icon: FileText },
     { label: "Consultas", value: 0, icon: Calendar },
@@ -490,7 +496,7 @@ function InicioView({ currentRole, deviceType, onNavigate }: any) {
       </ResponsiveCard>
 
       {/* Herramienta IA: Texto a voz (Médico / Psicólogo / Auxiliar / Enfermero Jefe / Fisioterapeuta / Nutricionista / Fonoaudiólogo / Odontólogo) */}
-      {['medico','psicologo','auxiliar_enfermeria','enfermero_jefe','fisioterapeuta','nutricionista','fonoaudiologo','odontologo'].includes(currentRole) && (
+      {ENABLE_TTS && ['medico','psicologo','auxiliar_enfermeria','enfermero_jefe','fisioterapeuta','nutricionista','fonoaudiologo','odontologo'].includes(currentRole) ? (
         <ResponsiveCard>
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-eden-800">Asistente de voz (ElevenLabs)</h3>
@@ -551,6 +557,13 @@ function InicioView({ currentRole, deviceType, onNavigate }: any) {
             </div>
           )}
         </ResponsiveCard>
+      ) : ENABLE_TTS ? null : (
+        <ResponsiveCard>
+          <h3 className="font-semibold text-eden-800 mb-2">Asistente de voz (TTS)</h3>
+          <p className="text-sm text-eden-700">
+            Esta función requiere una cuenta activa de ElevenLabs. Configure su API key en el backend para habilitarla.
+          </p>
+        </ResponsiveCard>
       )}
 
       {/* Herramienta IA: Voz a texto (Médico / Psicólogo / Auxiliar / Enfermero Jefe / Fisioterapeuta / Nutricionista / Fonoaudiólogo / Odontólogo) */}
@@ -559,6 +572,18 @@ function InicioView({ currentRole, deviceType, onNavigate }: any) {
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-eden-800">Dictado médico (STT)</h3>
             <ResponsiveBadge tone="info">STT</ResponsiveBadge>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 mb-4">
+            <ResponsiveField label="Proveedor STT">
+              <ResponsiveSelect
+                value={sttProvider}
+                onChange={(event: any) => setSttProvider(event.target.value)}
+                options={sttProviderOptions}
+              />
+            </ResponsiveField>
+            <div className="text-xs text-eden-600 md:pt-6">
+              Hugging Face utiliza modelos Whisper (open-source). ElevenLabs requiere API key activa y puede generar cargos.
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <ResponsiveButton
@@ -578,7 +603,7 @@ function InicioView({ currentRole, deviceType, onNavigate }: any) {
                         // Convertir a mp3 puede no ser posible en navegador; ElevenLabs acepta varios formatos.
                         const form = new FormData();
                         form.append('audio', blob, 'audio.webm');
-                        const resp = await fetch(`${API_BASE_URL}/stt`, { method: 'POST', body: form });
+                        const resp = await fetch(`${API_BASE_URL}/stt?provider=${sttProvider}`, { method: 'POST', body: form });
                         if (!resp.ok) {
                           let msg = 'Error transcribiendo audio';
                           try {

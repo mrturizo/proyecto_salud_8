@@ -5,14 +5,23 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const fetch = require('node-fetch');
-const FormData = require('form-data');
 const multer = require('multer');
 const adresService = require('./services/adresService');
 const adresScraper = require('./services/adresScraperService');
 const terminologyClient = require('./services/terminologyClient');
 const fhirClient = require('./services/fhirClient');
 const aiService = require('./services/aiService');
+const sttProviders = require('./services/sttProviders');
 require('dotenv').config();
+
+// Verificar carga de claves sensibles sin exponerlas completas
+const elevenKey = process.env.ELEVENLABS_API_KEY || '';
+if (elevenKey) {
+  const masked = `${elevenKey.slice(0, 6)}***${elevenKey.slice(-4)}`;
+  console.log('🔐 ELEVENLABS_API_KEY cargada:', masked);
+} else {
+  console.warn('⚠️ ELEVENLABS_API_KEY NO está configurada en este entorno');
+}
 
 // ✅ PRIMERO DECLARAR app
 const app = express();
@@ -43,15 +52,62 @@ app.use(express.static(path.join(__dirname, 'public')));
 const upload = multer({ dest: path.join(__dirname, 'uploads') });
 
 // Conectar a SQLite (usa la ruta correcta de tu BD)
-// Preferimos la BD lista en backend/database/salud_digital_aps.db
-const defaultDbPath = path.join(__dirname, 'database', 'salud_digital_aps.db');
-const dbPath = process.env.DB_PATH || defaultDbPath;
-console.log('📊 Base de datos: ', dbPath);
+// En Render, copiamos la BD a /tmp para tener permisos de escritura
+console.log('🔧 Iniciando configuración de base de datos...');
+const sourceDbPath = path.join(__dirname, 'database', 'salud_digital_aps.db');
+const tmpDbPath = '/tmp/salud_digital_aps.db';
+
+console.log('📍 Ruta fuente:', sourceDbPath);
+console.log('📍 Ruta temporal:', tmpDbPath);
+console.log('📍 __dirname:', __dirname);
+
+// Determinar qué ruta usar
+// NOTA: En Render siempre usamos /tmp para tener permisos de escritura
+// Ignoramos DB_PATH si está configurado para evitar problemas de permisos
+let dbPath = null;
+
+console.log('🔍 Verificando archivo fuente...');
+const sourceExists = fs.existsSync(sourceDbPath);
+console.log('🔍 Archivo fuente existe:', sourceExists);
+
+const tmpExists = fs.existsSync(tmpDbPath);
+console.log('🔍 Archivo en /tmp existe:', tmpExists);
+
+// Siempre intentar usar /tmp (ignorar DB_PATH en Render)
+if (sourceExists && !tmpExists) {
+  console.log('📋 Copiando base de datos de', sourceDbPath, 'a', tmpDbPath);
+  try {
+    fs.copyFileSync(sourceDbPath, tmpDbPath);
+    console.log('✅ Base de datos copiada exitosamente a /tmp');
+    dbPath = tmpDbPath;
+  } catch (err) {
+    console.error('❌ Error copiando BD a /tmp:', err.message);
+    console.log('⚠️  Intentando usar ruta original como fallback');
+    dbPath = sourceDbPath;
+  }
+} else if (tmpExists) {
+  console.log('✅ Usando base de datos existente en /tmp');
+  dbPath = tmpDbPath;
+} else if (sourceExists) {
+  console.log('⚠️  Archivo fuente existe pero no se pudo copiar, usando fuente');
+  dbPath = sourceDbPath;
+} else {
+  console.log('⚠️  Ningún archivo encontrado, usando /tmp (se creará vacío)');
+  dbPath = tmpDbPath;
+}
+
+// Si DB_PATH está configurado pero no es /tmp, advertir
+if (process.env.DB_PATH && process.env.DB_PATH !== tmpDbPath) {
+  console.log('⚠️  DB_PATH está configurado pero se está usando /tmp para evitar problemas de permisos');
+  console.log('⚠️  DB_PATH configurado:', process.env.DB_PATH);
+}
+
+console.log('📊 Base de datos final: ', dbPath);
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
-    console.error('Error conectando a SQLite:', err.message);
+    console.error('❌ Error conectando a SQLite:', err.message);
   } else {
-    console.log('✅ Conectado a la base de datos SQLite');
+    console.log('✅ Conectado exitosamente a la base de datos SQLite');
   }
 });
 // ==================== ENDPOINTS DE AUTENTICACIÓN ====================
@@ -2809,18 +2865,22 @@ app.get('/api/test', (req, res) => {
 // Genera audio a partir de texto usando ElevenLabs y lo devuelve como audio/mpeg
 app.post('/api/tts', async (req, res) => {
   try {
+    console.log('[TTS] Request recibido:', { texto: req.body?.texto?.substring(0, 50) + '...', voiceId: req.body?.voiceId });
     const { texto, voiceId } = req.body || {};
     if (!texto || typeof texto !== 'string') {
+      console.log('[TTS] Error: Falta el texto');
       return res.status(400).json({ error: 'Falta el texto' });
     }
 
     const apiKey = process.env.ELEVENLABS_API_KEY;
     if (!apiKey) {
+      console.log('[TTS] Error: Falta ELEVENLABS_API_KEY');
       return res.status(500).json({ error: 'Falta ELEVENLABS_API_KEY en el servidor' });
     }
 
     const selectedVoiceId = voiceId || 'EXAVITQu4vr4xnSDxMaL';
     const url = `https://api.elevenlabs.io/v1/text-to-speech/${selectedVoiceId}`;
+    console.log('[TTS] Llamando a ElevenLabs:', url);
 
     const response = await fetch(url, {
       method: 'POST',
@@ -2836,9 +2896,11 @@ app.post('/api/tts', async (req, res) => {
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('[TTS] Error ElevenLabs:', response.status, errorText);
       return res.status(500).json({ error: 'Error ElevenLabs', details: errorText });
     }
 
+    console.log('[TTS] Audio generado exitosamente');
     const audioBuffer = Buffer.from(await response.arrayBuffer());
 
     // Opción A: devolver el audio directamente como streaming
@@ -2853,20 +2915,27 @@ app.post('/api/tts', async (req, res) => {
     // fs.writeFileSync(audioPath, audioBuffer);
     // return res.json({ audioUrl: '/voz.mp3' });
   } catch (err) {
-    console.error('TTS error:', err);
+    console.error('[TTS] Error interno:', err);
     return res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
 
-// ==================== ENDPOINT STT ELEVENLABS ====================
+// ==================== ENDPOINT STT ====================
 // Recibe un archivo de audio (multipart/form-data campo "audio") y devuelve la transcripción
 app.post('/api/stt', upload.single('audio'), async (req, res) => {
   try {
-    const apiKey = process.env.ELEVENLABS_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: 'Falta ELEVENLABS_API_KEY en el servidor' });
-    }
+    const provider =
+      (req.query.provider || req.body?.provider || process.env.STT_DEFAULT_PROVIDER || sttProviders.DEFAULT_PROVIDER).toLowerCase();
+
+    console.log('[STT] Request recibido:', {
+      provider,
+      filename: req.file?.originalname,
+      size: req.file?.size,
+      mimetype: req.file?.mimetype
+    });
+
     if (!req.file) {
+      console.log('[STT] Error: Falta archivo de audio');
       return res.status(400).json({ error: 'Falta archivo de audio' });
     }
 
@@ -2874,33 +2943,23 @@ app.post('/api/stt', upload.single('audio'), async (req, res) => {
     const audioBuffer = fs.readFileSync(inputFilePath);
     const contentType = (req.file.mimetype || 'audio/webm').split(';')[0];
 
-    // Enviar como multipart/form-data con campo "file" + params del modelo
-    const form = new FormData();
-    form.append('file', audioBuffer, { filename: req.file.originalname || 'audio.webm', contentType });
-    form.append('model_id', 'scribe_v1');
-    form.append('language_code', 'es');
-
-    const sttUrl = 'https://api.elevenlabs.io/v1/speech-to-text';
-    const response = await fetch(sttUrl, {
-      method: 'POST',
-      headers: { 'xi-api-key': apiKey, 'Accept': 'application/json', ...form.getHeaders() },
-      body: form
-    });
-
-    // Limpiar archivo temporal
-    fs.unlink(inputFilePath, () => {});
-
-    if (!response.ok) {
-      const errText = await response.text().catch(() => '');
-      return res.status(502).json({ error: 'Error ElevenLabs STT', status: response.status, details: errText });
+    let text = '';
+    try {
+      text = await sttProviders.transcribe({
+        provider,
+        audioBuffer,
+        contentType,
+        filename: req.file.originalname
+      });
+    } finally {
+      fs.unlink(inputFilePath, () => {});
     }
 
-    const data = await response.json().catch(() => null);
-    // Respuesta esperada: { text: "..." } u otro formato compatible
-    return res.json(data || { text: '' });
+    console.log('[STT] Transcripción exitosa con proveedor', provider);
+    return res.json({ text, provider });
   } catch (err) {
-    console.error('STT error:', err);
-    return res.status(500).json({ error: 'Error interno del servidor' });
+    console.error('[STT] Error interno:', err.message);
+    return res.status(500).json({ error: err.message || 'Error interno del servidor' });
   }
 });
 

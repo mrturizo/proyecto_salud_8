@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Mic, MicOff, Loader2 } from 'lucide-react';
 import { API_BASE_URL } from '../config/api';
+import { useSttProvider } from '../contexts/SttProviderContext';
 
 interface STTButtonProps {
   onTranscription: (text: string) => void;
@@ -21,6 +22,7 @@ export const STTButton: React.FC<STTButtonProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const { provider } = useSttProvider();
 
   const startRecording = async () => {
     try {
@@ -61,7 +63,8 @@ export const STTButton: React.FC<STTButtonProps> = ({
           const formData = new FormData();
           formData.append('audio', audioBlob, 'audio.webm');
 
-          const response = await fetch(`${API_BASE_URL}/stt`, {
+          const query = new URLSearchParams({ provider }).toString();
+          const response = await fetch(`${API_BASE_URL}/stt?${query}`, {
             method: 'POST',
             body: formData
           });
