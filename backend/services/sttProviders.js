@@ -11,7 +11,7 @@ async function transcribeWithHuggingFace({ audioBuffer, contentType, filename })
     throw new Error('HF_API_TOKEN no está configurado en el servidor');
   }
 
-  const endpoint = `https://api-inference.huggingface.co/models/${HF_DEFAULT_MODEL}`;
+  const endpoint = `https://router.huggingface.co/${HF_DEFAULT_MODEL}`;
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
