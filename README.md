@@ -70,7 +70,7 @@ c. **Cree el archivo de variables de entorno:**
 
    # Hugging Face Inference API (STT por defecto)
    HF_API_TOKEN=tu_token_de_huggingface
-   HF_STT_MODEL=openai/whisper-large-v2
+   HF_STT_MODEL=jonatasgrosman/wav2vec2-large-xlsr-53-spanish
    STT_DEFAULT_PROVIDER=huggingface
 
    # API Key de Apitude para consultar ADRES/BDUA

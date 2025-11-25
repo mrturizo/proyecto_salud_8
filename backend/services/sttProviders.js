@@ -1,7 +1,8 @@
 const fetch = require('node-fetch');
 const FormData = require('form-data');
 
-const HF_DEFAULT_MODEL = process.env.HF_STT_MODEL || 'openai/whisper-large-v2';
+const HF_DEFAULT_MODEL =
+  process.env.HF_STT_MODEL || 'jonatasgrosman/wav2vec2-large-xlsr-53-spanish';
 const DEFAULT_PROVIDER = (process.env.STT_DEFAULT_PROVIDER || 'huggingface').toLowerCase();
 
 async function transcribeWithHuggingFace({ audioBuffer, contentType, filename }) {
