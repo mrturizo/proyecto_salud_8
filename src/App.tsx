@@ -409,9 +409,9 @@ function InicioView({ currentRole, deviceType, onNavigate }: any) {
   const [transcript, setTranscript] = useState<string>("");
   const { provider: sttProvider, setProvider: setSttProvider } = useSttProvider();
   const sttProviderOptions = [
-    { value: 'whisper', label: 'Whisper Local (Gratuito · recomendado)' },
+    { value: 'whisper', label: 'Whisper Local (Deshabilitado temporalmente)' },
     { value: 'huggingface', label: 'Hugging Face (API)' },
-    { value: 'elevenlabs', label: 'ElevenLabs (API)' }
+    { value: 'elevenlabs', label: 'ElevenLabs (API · recomendado)' }
   ];
   const [kpis, setKpis] = useState([
     { label: "Registros hoy", value: 0, icon: FileText },
@@ -583,7 +583,7 @@ function InicioView({ currentRole, deviceType, onNavigate }: any) {
               />
             </ResponsiveField>
             <div className="text-xs text-eden-600 md:pt-6">
-              Whisper es gratuito y funciona localmente. Hugging Face y ElevenLabs requieren API keys y pueden tener límites de uso.
+              Whisper está deshabilitado temporalmente. Usa ElevenLabs o Hugging Face como proveedor STT.
             </div>
           </div>
           <div className="flex items-center gap-3">
