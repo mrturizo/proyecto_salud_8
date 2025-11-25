@@ -1,8 +1,10 @@
 const fetch = require('node-fetch');
 const FormData = require('form-data');
 
+// Modelo predeterminado: Whisper-small es más ligero y generalmente disponible en el router gratuito
+// Alternativas: openai/whisper-base, openai/whisper-medium
 const HF_DEFAULT_MODEL =
-  process.env.HF_STT_MODEL || 'jonatasgrosman/wav2vec2-large-xlsr-53-spanish';
+  process.env.HF_STT_MODEL || 'openai/whisper-small';
 const DEFAULT_PROVIDER = (process.env.STT_DEFAULT_PROVIDER || 'huggingface').toLowerCase();
 
 async function transcribeWithHuggingFace({ audioBuffer, contentType, filename }) {
@@ -11,14 +13,20 @@ async function transcribeWithHuggingFace({ audioBuffer, contentType, filename })
     throw new Error('HF_API_TOKEN no está configurado en el servidor');
   }
 
-  // El router de Hugging Face usa el formato /models/{model_name} para modelos de inferencia
-  const endpoint = `https://router.huggingface.co/models/${HF_DEFAULT_MODEL}`;
+  // El router de Hugging Face: probamos ambos formatos posibles
+  // Formato 1: https://router.huggingface.co/models/{model}
+  // Formato 2: https://router.huggingface.co/{model}
+  let endpoint = `https://router.huggingface.co/models/${HF_DEFAULT_MODEL}`;
   
-  // Para modelos de audio, necesitamos enviar el audio como FormData
-  const form = new FormData();
-  form.append('file', audioBuffer, { filename: filename || 'audio.webm', contentType: contentType || 'audio/webm' });
+  // Función auxiliar para crear FormData
+  const createFormData = () => {
+    const form = new FormData();
+    form.append('file', audioBuffer, { filename: filename || 'audio.webm', contentType: contentType || 'audio/webm' });
+    return form;
+  };
   
-  const response = await fetch(endpoint, {
+  let form = createFormData();
+  let response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -27,9 +35,25 @@ async function transcribeWithHuggingFace({ audioBuffer, contentType, filename })
     body: form
   });
 
+  // Si falla con 404, intentamos sin /models/
+  if (response.status === 404) {
+    console.log(`[STT] Intentando formato alternativo sin /models/`);
+    endpoint = `https://router.huggingface.co/${HF_DEFAULT_MODEL}`;
+    form = createFormData();
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...form.getHeaders()
+      },
+      body: form
+    });
+  }
+
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`HuggingFace (${response.status}): ${text}`);
+    console.error(`[STT] Error HuggingFace: ${response.status} - ${text.substring(0, 200)}`);
+    throw new Error(`HuggingFace (${response.status}): ${text.substring(0, 500)}`);
   }
 
   const data = await response.json().catch(() => null);
