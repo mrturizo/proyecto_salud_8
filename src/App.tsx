@@ -409,8 +409,9 @@ function InicioView({ currentRole, deviceType, onNavigate }: any) {
   const [transcript, setTranscript] = useState<string>("");
   const { provider: sttProvider, setProvider: setSttProvider } = useSttProvider();
   const sttProviderOptions = [
-    { value: 'huggingface', label: 'Hugging Face (Whisper · recomendado)' },
-    { value: 'elevenlabs', label: 'ElevenLabs' }
+    { value: 'whisper', label: 'Whisper Local (Gratuito · recomendado)' },
+    { value: 'huggingface', label: 'Hugging Face (API)' },
+    { value: 'elevenlabs', label: 'ElevenLabs (API)' }
   ];
   const [kpis, setKpis] = useState([
     { label: "Registros hoy", value: 0, icon: FileText },
@@ -582,7 +583,7 @@ function InicioView({ currentRole, deviceType, onNavigate }: any) {
               />
             </ResponsiveField>
             <div className="text-xs text-eden-600 md:pt-6">
-              Hugging Face utiliza modelos Whisper (open-source). ElevenLabs requiere API key activa y puede generar cargos.
+              Whisper es gratuito y funciona localmente. Hugging Face y ElevenLabs requieren API keys y pueden tener límites de uso.
             </div>
           </div>
           <div className="flex items-center gap-3">

@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { DEFAULT_STT_PROVIDER } from '../config/api';
 
-type SttProvider = 'huggingface' | 'elevenlabs';
+type SttProvider = 'whisper' | 'huggingface' | 'elevenlabs';
 
 interface SttProviderContextValue {
   provider: SttProvider;
