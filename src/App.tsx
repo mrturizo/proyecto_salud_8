@@ -12,6 +12,7 @@ import { API_BASE_URL, ENABLE_TTS } from "./config/api";
 import { FHIR_THROTTLE, delay as throttleDelay } from "./config/fhirThrottle";
 import { AntecedentesFamiliares } from "./components/AntecedentesFamiliares";
 import FHIRDemoView from "./components/FHIRDemoView";
+import StrokePredictionDemoView from "./components/StrokePredictionDemoView";
 import { useSttProvider } from "./contexts/SttProviderContext";
 
 import { 
@@ -66,9 +67,11 @@ import {
   FileCheck,
   Target,
   Globe,
-  LogOut
+  LogOut,
+  Loader2
 } from "lucide-react";
 import { AuthService } from "./services/authService";
+import { predictStrokeRisk, StrokePredictionRequest } from "./services/aiService";
 
 const OBSERVATION_BATCH_SIZE = Math.max(1, FHIR_THROTTLE.OBSERVATION_BATCH_SIZE);
 const OBSERVATION_BATCH_DELAY_MS = Math.max(0, FHIR_THROTTLE.OBSERVATION_BATCH_DELAY_MS);
@@ -91,6 +94,7 @@ export const USER_ROLES = {
       { key: "bd-pacientes", label: "BD Pacientes", icon: Search },
       { key: "dashboard-epidemio", label: "Dashboard", icon: BarChart3 },
       { key: "fhir-demo", label: "Interoperabilidad FHIR", icon: Globe },
+      { key: "stroke-demo", label: "Predicción ACV (Demo)", icon: Activity },
       { key: "configuracion", label: "Configuración", icon: Settings },
       { key: "ayuda", label: "Ayuda", icon: HelpCircle }
     ]
@@ -1620,6 +1624,10 @@ function ConsultaFormView({ patient, deviceType }: any) {
   const [glucometria, setGlucometria] = useState('');
   const [glasgow, setGlasgow] = useState('');
   
+  // Predicción de ACV
+  const [strokePrediction, setStrokePrediction] = useState<any>(null);
+  const [predictingStroke, setPredictingStroke] = useState(false);
+  
   // Examen y diagnósticos
   const [examenFisico, setExamenFisico] = useState('');
   const [diagnosticoPrincipal, setDiagnosticoPrincipal] = useState('');
@@ -1791,6 +1799,102 @@ function ConsultaFormView({ patient, deviceType }: any) {
       setImc('');
     }
   }, [peso, talla]);
+
+  // Función para calcular edad desde fecha de nacimiento
+  const calcularEdad = (fechaNacimiento: string): number | null => {
+    if (!fechaNacimiento) return null;
+    const hoy = new Date();
+    const nacimiento = new Date(fechaNacimiento);
+    let edad = hoy.getFullYear() - nacimiento.getFullYear();
+    const mes = hoy.getMonth() - nacimiento.getMonth();
+    if (mes < 0 || (mes === 0 && hoy.getDate() < nacimiento.getDate())) {
+      edad--;
+    }
+    return edad;
+  };
+
+  // Extraer datos del paciente para predicción
+  const extractPatientDataForPrediction = (): StrokePredictionRequest => {
+    // Calcular edad
+    let patientAge: number | null = null;
+    if (patient?.edad) {
+      patientAge = typeof patient.edad === 'number' ? patient.edad : parseFloat(patient.edad);
+    } else if (patient?.fecha_nacimiento) {
+      patientAge = calcularEdad(patient.fecha_nacimiento);
+    }
+
+    // Obtener género
+    const patientGender = patient?.genero || patient?.sexo || '';
+
+    // Construir objeto de antecedentes personales
+    const antecedentesPersonalesText = typeof antecedentesPersonales === 'string'
+      ? antecedentesPersonales
+      : (antecedentesPersonales.patologicos || '');
+
+    return {
+      age: patientAge || 0,
+      gender: patientGender,
+      estadoCivil: estadoCivil || undefined,
+      tensionSistolica: tensionSistolica ? parseFloat(tensionSistolica) : undefined,
+      tensionDiastolica: tensionDiastolica ? parseFloat(tensionDiastolica) : undefined,
+      frecuenciaCardiaca: frecuenciaCardiaca ? parseFloat(frecuenciaCardiaca) : undefined,
+      peso: peso ? parseFloat(peso) : undefined,
+      talla: talla ? parseFloat(talla) : undefined,
+      imc: imc ? parseFloat(imc) : undefined,
+      glucometria: glucometria ? parseFloat(glucometria) : undefined,
+      antecedentesPersonales: antecedentesPersonalesText || undefined,
+      antecedentesFamiliares: antecedentesFamiliares || undefined,
+      territorio: undefined, // No disponible en ConsultaFormView por ahora
+      ocupacion: undefined, // No disponible en ConsultaFormView por ahora
+      smokingStatus: undefined // No disponible en ConsultaFormView por ahora
+    };
+  };
+
+  // Manejar predicción de ACV
+  const handlePredictStroke = async () => {
+    const patientData = extractPatientDataForPrediction();
+
+    // Validar que al menos la edad esté disponible
+    if (!patientData.age || patientData.age <= 0) {
+      alert('No se puede realizar la predicción: la edad del paciente no está disponible. Por favor, verifica que el paciente tenga una fecha de nacimiento o edad registrada.');
+      return;
+    }
+
+    setPredictingStroke(true);
+    setStrokePrediction(null);
+
+    try {
+      const result = await predictStrokeRisk(patientData);
+      setStrokePrediction(result);
+      
+      if (!result.success) {
+        alert(`Error al realizar la predicción: ${result.error || 'Error desconocido'}`);
+      }
+    } catch (error: any) {
+      console.error('Error en predicción de ACV:', error);
+      alert(`Error al realizar la predicción: ${error.message || 'Error desconocido'}`);
+      setStrokePrediction({
+        success: false,
+        error: error.message || 'Error desconocido'
+      });
+    } finally {
+      setPredictingStroke(false);
+    }
+  };
+
+  // Función para obtener el color del badge según el nivel de riesgo
+  const getRiskBadgeTone = (riskLevel?: string) => {
+    if (riskLevel === 'high') return 'critical';
+    if (riskLevel === 'medium') return 'warning';
+    return 'health';
+  };
+
+  // Función para obtener la etiqueta del nivel de riesgo
+  const getRiskLabel = (riskLevel?: string) => {
+    if (riskLevel === 'high') return 'Alto';
+    if (riskLevel === 'medium') return 'Medio';
+    return 'Bajo';
+  };
 
   // Cargar HC existente o crear nueva
   useEffect(() => {
@@ -2686,6 +2790,91 @@ function ConsultaFormView({ patient, deviceType }: any) {
               <ResponsiveInput value={glasgow} onChange={(e: any) => setGlasgow(e.target.value)} placeholder="Ej: 15/15" />
             </ResponsiveField>
           </div>
+        </ResponsiveCard>
+
+        {/* Predicción de Riesgo ACV */}
+        <ResponsiveCard>
+          <div className="flex items-center justify-between mb-3">
+            <h5 className="font-medium text-stone-900">Predicción de Riesgo ACV</h5>
+            <Activity className="w-5 h-5 text-eden-600" />
+          </div>
+          <p className="text-sm text-stone-600 mb-4">
+            Utiliza los datos del paciente y la información de la consulta para predecir el riesgo de accidente cerebrovascular.
+          </p>
+          
+          <button
+            onClick={handlePredictStroke}
+            disabled={predictingStroke || !patient?.edad && !patient?.fecha_nacimiento}
+            className="w-full md:w-auto px-6 py-3 bg-eden-600 text-white rounded-lg font-medium hover:bg-eden-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {predictingStroke ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>Calculando predicción...</span>
+              </>
+            ) : (
+              <>
+                <Activity className="w-5 h-5" />
+                <span>Predecir Riesgo ACV</span>
+              </>
+            )}
+          </button>
+
+          {!patient?.edad && !patient?.fecha_nacimiento && (
+            <p className="text-xs text-amber-600 mt-2">
+              ⚠️ No se puede realizar la predicción: falta la edad del paciente. Verifica que el paciente tenga una fecha de nacimiento o edad registrada.
+            </p>
+          )}
+
+          {strokePrediction && strokePrediction.success && (
+            <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-lg space-y-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-emerald-600" />
+                <h6 className="font-medium text-emerald-900">Resultado de la Predicción</h6>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-emerald-700 mb-1">Nivel de Riesgo</p>
+                  <ResponsiveBadge tone={getRiskBadgeTone(strokePrediction.risk_level)}>
+                    {getRiskLabel(strokePrediction.risk_level)}
+                  </ResponsiveBadge>
+                </div>
+                <div>
+                  <p className="text-xs text-emerald-700 mb-1">Probabilidad</p>
+                  <p className="text-xl font-bold text-emerald-900">
+                    {(strokePrediction.probability ? strokePrediction.probability * 100 : 0).toFixed(1)}%
+                  </p>
+                </div>
+              </div>
+
+              {strokePrediction.recommendations && strokePrediction.recommendations.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-emerald-900 mb-2">Recomendaciones</p>
+                  <ul className="space-y-1">
+                    {strokePrediction.recommendations.map((rec: string, idx: number) => (
+                      <li key={idx} className="flex items-start gap-2 text-xs text-emerald-800">
+                        <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                        <span>{rec}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          {strokePrediction && !strokePrediction.success && (
+            <div className="mt-4 p-4 bg-rose-50 border border-rose-200 rounded-lg">
+              <div className="flex items-start gap-2">
+                <XCircle className="w-5 h-5 text-rose-600 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-rose-900 mb-1">Error en la predicción</p>
+                  <p className="text-xs text-rose-700">{strokePrediction.error || 'Error desconocido'}</p>
+                </div>
+              </div>
+            </div>
+          )}
         </ResponsiveCard>
 
         {/* Examen físico */}
@@ -9496,6 +9685,8 @@ export default function App() {
         return <ConfiguracionView deviceType={deviceType} />;
       case "fhir-demo":
         return <FHIRDemoView />;
+      case "stroke-demo":
+        return <StrokePredictionDemoView />;
       case "ayuda":
         return <AyudaView deviceType={deviceType} />;
       default:
