@@ -2226,7 +2226,7 @@ function ConsultaFormView({ patient, deviceType }: any) {
               atencion: {
                 atencion_id: nuevaAtencionId,
                 paciente_id: patient.id,
-                usuario_id: user?.id || 0,
+                usuario_id: user?.id ? Number(user.id) : 0,
                 fecha_atencion: new Date().toISOString().split('T')[0],
                 tipo_atencion: 'Consulta Médica',
                 estado: 'Completada'
