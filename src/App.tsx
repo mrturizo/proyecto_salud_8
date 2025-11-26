@@ -2282,7 +2282,8 @@ function ConsultaFormView({ patient, deviceType }: any) {
               practitionerName
             });
             const encounterResult = await createEncounter(encounterResource);
-            encounterReference = `Encounter/${fhirEncounterId}`;
+            const createdEncounterId = encounterResult.resource?.id || fhirEncounterId;
+            encounterReference = `Encounter/${createdEncounterId}`;
           }
 
           // 3. Crear Conditions (diagnósticos)
@@ -2293,7 +2294,7 @@ function ConsultaFormView({ patient, deviceType }: any) {
           const conditionResources = buildConditionResources({
             diagnosticos: diagnosticosTotales,
             patientReference,
-            encounterId: nuevaAtencionId || undefined,
+            encounterReference,
             practitioner: practitionerReference ? {
               id: practitionerReference,
               name: practitionerName
@@ -3143,7 +3144,7 @@ function RecetaFormView({ patient, deviceType }: any) {
             } : practitionerName ? {
               name: practitionerName
             } : undefined,
-            encounterId: atencionId,
+            encounterReference: undefined,
             diagnosticos: diagnosticosTotales
           });
 

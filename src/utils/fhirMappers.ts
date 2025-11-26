@@ -8,7 +8,7 @@ interface PractitionerInfo {
 interface ConditionInput {
   diagnosticos: string[];
   patientReference: string;
-  encounterId?: number | null;
+  encounterReference?: string;
   practitioner?: PractitionerInfo;
 }
 
@@ -16,7 +16,7 @@ interface MedicationInput {
   medicamentos: any[];
   patientReference: string;
   practitioner?: PractitionerInfo;
-  encounterId?: number | null;
+  encounterReference?: string;
   diagnosticos?: string[];
 }
 
@@ -186,7 +186,7 @@ export function parseTerminologyValue(value: string) {
 export function buildConditionResources({
   diagnosticos,
   patientReference,
-  encounterId,
+  encounterReference,
   practitioner
 }: ConditionInput) {
   const recordedDate = new Date().toISOString();
@@ -236,7 +236,7 @@ export function buildConditionResources({
             : undefined
         },
         subject: { reference: patientReference },
-        encounter: encounterId ? { reference: `Encounter/${encounterId}` } : undefined,
+        encounter: encounterReference ? { reference: encounterReference } : undefined,
         recordedDate,
         recorder: practitioner?.name
           ? {
@@ -252,7 +252,7 @@ export function buildMedicationRequestResources({
   medicamentos,
   patientReference,
   practitioner,
-  encounterId,
+  encounterReference,
   diagnosticos
 }: MedicationInput) {
   const authoredOn = new Date().toISOString();
@@ -313,7 +313,7 @@ export function buildMedicationRequestResources({
           text: parsed.display || med.nombre
         },
         subject: { reference: patientReference },
-        encounter: encounterId ? { reference: `Encounter/${encounterId}` } : undefined,
+        encounter: encounterReference ? { reference: encounterReference } : undefined,
         authoredOn,
         requester: practitioner?.name
           ? {
