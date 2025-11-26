@@ -1760,6 +1760,7 @@ async function getOrCreatePractitioner(user: any): Promise<string> {
 
 function ConsultaFormView({ patient, deviceType }: any) {
   const [atencionId, setAtencionId] = useState<number | null>(null);
+  const [ultimaAtencionId, setUltimaAtencionId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [fhirSyncStatus, setFhirSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
@@ -2245,7 +2246,13 @@ function ConsultaFormView({ patient, deviceType }: any) {
 
         nuevaAtencionId = resultado.atencion_id;
         setAtencionId(resultado.atencion_id);
+        setUltimaAtencionId(resultado.atencion_id);
         alert('Nueva atención creada exitosamente');
+      }
+      
+      // Actualizar también cuando se actualiza
+      if (atencionId) {
+        setUltimaAtencionId(atencionId);
       }
 
       // Sincronización HL7 FHIR
@@ -2980,23 +2987,35 @@ function ConsultaFormView({ patient, deviceType }: any) {
           </ResponsiveButton>
           <ResponsiveButton 
             onClick={async () => {
-              if (!atencionId) {
-                // Primero crear la atención
+              try {
+                setGuardando(true);
+                // Primero guardar/actualizar la atención
                 await handleGuardar();
-              } else {
-                // Guardar los datos actualizados
-                await handleGuardar();
-              }
-              
-              // Marcar atención como completada si existe
-              if (atencionId) {
-                try {
-                  await AuthService.completarAtencion(atencionId);
-                  alert('Consulta finalizada exitosamente');
-                } catch (e: any) {
-                  console.error('Error completando atención:', e);
-                  alert('Error al finalizar consulta: ' + e.message);
+                
+                // Esperar un momento para que el estado se actualice
+                await new Promise(resolve => setTimeout(resolve, 200));
+                
+                // Obtener el ID de atención actual (puede ser el que ya existía o el nuevo)
+                const currentAtencionId = ultimaAtencionId || atencionId;
+                
+                // Marcar atención como completada
+                if (currentAtencionId) {
+                  try {
+                    await AuthService.completarAtencion(currentAtencionId);
+                    alert('Consulta finalizada exitosamente');
+                  } catch (e: any) {
+                    console.error('Error completando atención:', e);
+                    alert('Error al finalizar consulta: ' + e.message);
+                  }
+                } else {
+                  console.warn('No se pudo obtener el ID de atención para completar');
+                  alert('Consulta guardada, pero no se pudo marcar como completada. Intenta finalizarla nuevamente.');
                 }
+              } catch (e: any) {
+                console.error('Error en proceso de finalización:', e);
+                alert('Error al finalizar consulta: ' + e.message);
+              } finally {
+                setGuardando(false);
               }
             }}
             disabled={guardando}

@@ -2184,7 +2184,7 @@ app.post('/api/demandas-inducidas', (req, res) => {
       edad, sexo, eps, regimen, ips_atencion, ebs_numero, educacion_salud, intervencion_efectiva,
       tipo_identificacion, numero_identificacion, telefono, direccion, nombres_completos,
       intervencion_efectiva_si, seguimiento_verificado, seguimiento_medio, fecha_creacion_timestamp
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
   
   const params = [
