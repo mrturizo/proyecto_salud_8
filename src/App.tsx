@@ -406,20 +406,6 @@ const MobileNavItem = ({ label, icon: Icon, active, onClick, badge }: any) => (
 function InicioView({ currentRole, deviceType, onNavigate }: any) {
   const roleConfig = USER_ROLES[currentRole];
   const [isOnline, setIsOnline] = useState(false);
-  const [ttsText, setTtsText] = useState("");
-  const [isTtsLoading, setIsTtsLoading] = useState(false);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const audioRef = React.useRef<HTMLAudioElement | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
-  const audioChunksRef = React.useRef<Blob[]>([]);
-  const [transcript, setTranscript] = useState<string>("");
-  const { provider: sttProvider, setProvider: setSttProvider } = useSttProvider();
-  const sttProviderOptions = [
-    { value: 'whisper', label: 'Whisper Local (Deshabilitado temporalmente)' },
-    { value: 'huggingface', label: 'Hugging Face (API)' },
-    { value: 'elevenlabs', label: 'ElevenLabs (API · recomendado)' }
-  ];
   const [kpis, setKpis] = useState([
     { label: "Registros hoy", value: 0, icon: FileText },
     { label: "Consultas", value: 0, icon: Calendar },
@@ -464,7 +450,7 @@ function InicioView({ currentRole, deviceType, onNavigate }: any) {
             </span>
           </div>
           <ResponsiveBadge tone={isOnline ? "health" : "warning"}>
-            {isOnline ? "Sincronizado" : "3 pendientes"}
+            {isOnline ? "Sincronizado" : "Offline"}
           </ResponsiveBadge>
         </div>
       </ResponsiveCard>
@@ -503,155 +489,6 @@ function InicioView({ currentRole, deviceType, onNavigate }: any) {
         )}
       </ResponsiveCard>
 
-      {/* Herramienta IA: Texto a voz (Médico / Psicólogo / Auxiliar / Enfermero Jefe / Fisioterapeuta / Nutricionista / Fonoaudiólogo / Odontólogo) */}
-      {ENABLE_TTS && ['medico','psicologo','auxiliar_enfermeria','enfermero_jefe','fisioterapeuta','nutricionista','fonoaudiologo','odontologo'].includes(currentRole) ? (
-        <ResponsiveCard>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-eden-800">Asistente de voz (ElevenLabs)</h3>
-            <ResponsiveBadge tone="info">TTS</ResponsiveBadge>
-          </div>
-          <div className={`grid gap-3 ${deviceType === 'mobile' ? 'grid-cols-1' : 'grid-cols-6'}`}>
-            <div className={deviceType === 'mobile' ? '' : 'col-span-5'}>
-              <ResponsiveField label="Texto a convertir a voz">
-                <ResponsiveInput
-                  placeholder="Ej: Paciente con dolor torácico de 2 días de evolución..."
-                  value={ttsText}
-                  onChange={(e: any) => setTtsText(e.target.value)}
-                />
-              </ResponsiveField>
-            </div>
-            <div className="flex items-end">
-              <ResponsiveButton
-                onClick={async () => {
-                  if (!ttsText || isTtsLoading) return;
-                  try {
-                    setIsTtsLoading(true);
-                    setAudioUrl(null);
-                    const resp = await fetch(`${API_BASE_URL}/tts`,{
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ texto: ttsText })
-                    });
-                    if (!resp.ok) {
-                      const err = await resp.json().catch(() => ({}));
-                      throw new Error(err?.error || 'Error generando voz');
-                    }
-                    const blob = await resp.blob();
-                    const url = URL.createObjectURL(blob);
-                    setAudioUrl(url);
-                    setTimeout(() => {
-                      if (audioRef.current) {
-                        audioRef.current.play().catch(() => {});
-                      }
-                    }, 50);
-                  } catch (e) {
-                    console.error('TTS error:', e);
-                    alert(e instanceof Error ? e.message : 'Error generando voz');
-                  } finally {
-                    setIsTtsLoading(false);
-                  }
-                }}
-                variant="primary"
-                className="w-full"
-                disabled={!ttsText || isTtsLoading}
-              >
-                {isTtsLoading ? 'Generando...' : 'Generar voz'}
-              </ResponsiveButton>
-            </div>
-          </div>
-          {audioUrl && (
-            <div className="mt-3">
-              <audio ref={audioRef} src={audioUrl} controls className="w-full" />
-            </div>
-          )}
-        </ResponsiveCard>
-      ) : ENABLE_TTS ? null : (
-        <ResponsiveCard>
-          <h3 className="font-semibold text-eden-800 mb-2">Asistente de voz (TTS)</h3>
-          <p className="text-sm text-eden-700">
-            Esta función requiere una cuenta activa de ElevenLabs. Configure su API key en el backend para habilitarla.
-          </p>
-        </ResponsiveCard>
-      )}
-
-      {/* Herramienta IA: Voz a texto (Médico / Psicólogo / Auxiliar / Enfermero Jefe / Fisioterapeuta / Nutricionista / Fonoaudiólogo / Odontólogo) */}
-      {['medico','psicologo','auxiliar_enfermeria','enfermero_jefe','fisioterapeuta','nutricionista','fonoaudiologo','odontologo'].includes(currentRole) && (
-        <ResponsiveCard>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-eden-800">Dictado médico (STT)</h3>
-            <ResponsiveBadge tone="info">STT</ResponsiveBadge>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2 mb-4">
-            <ResponsiveField label="Proveedor STT">
-              <ResponsiveSelect
-                value={sttProvider}
-                onChange={(event: any) => setSttProvider(event.target.value)}
-                options={sttProviderOptions}
-              />
-            </ResponsiveField>
-            <div className="text-xs text-eden-600 md:pt-6">
-              Whisper está deshabilitado temporalmente. Usa ElevenLabs o Hugging Face como proveedor STT.
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <ResponsiveButton
-              variant={isRecording ? 'warning' : 'primary'}
-              onClick={async () => {
-                try {
-                  if (!isRecording) {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    const mr = new MediaRecorder(stream);
-                    audioChunksRef.current = [];
-                    mr.ondataavailable = (e: BlobEvent) => {
-                      if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
-                    };
-                    mr.onstop = async () => {
-                      try {
-                        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-                        // Convertir a mp3 puede no ser posible en navegador; ElevenLabs acepta varios formatos.
-                        const form = new FormData();
-                        form.append('audio', blob, 'audio.webm');
-                        const resp = await fetch(`${API_BASE_URL}/stt?provider=${sttProvider}`, { method: 'POST', body: form });
-                        if (!resp.ok) {
-                          let msg = 'Error transcribiendo audio';
-                          try {
-                            const err = await resp.json();
-                            msg = `${err?.error || msg}${err?.status ? ` (status ${err.status})` : ''}${err?.details ? `: ${err.details}` : ''}`;
-                          } catch {}
-                          throw new Error(msg);
-                        }
-                        const data = await resp.json();
-                        setTranscript(typeof data?.text === 'string' ? data.text : JSON.stringify(data));
-                      } catch (e) {
-                        console.error('STT error:', e);
-                        alert(e instanceof Error ? e.message : 'Error transcribiendo audio');
-                      }
-                    };
-                    mediaRecorderRef.current = mr;
-                    mr.start();
-                    setIsRecording(true);
-                  } else {
-                    mediaRecorderRef.current?.stop();
-                    setIsRecording(false);
-                  }
-                } catch (e) {
-                  console.error('Mic error:', e);
-                  alert('No se pudo acceder al micrófono');
-                }
-              }}
-            >
-              {isRecording ? 'Detener' : 'Grabar dictado'}
-            </ResponsiveButton>
-          </div>
-          {transcript && (
-            <div className="mt-3">
-              <ResponsiveField label="Transcripción">
-                <textarea className="w-full px-3 py-2 border border-sinbad-300 rounded-xl text-sm" rows={3} value={transcript} onChange={(e) => setTranscript(e.target.value)} />
-              </ResponsiveField>
-            </div>
-          )}
-        </ResponsiveCard>
-      )}
 
       {/* Acciones rápidas */}
       <ResponsiveCard>
@@ -678,55 +515,6 @@ function InicioView({ currentRole, deviceType, onNavigate }: any) {
         </div>
       </ResponsiveCard>
 
-      {/* Próximas citas - Solo en desktop y tablet */}
-      {deviceType !== 'mobile' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-          <ResponsiveCard>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-eden-800">Próximas citas</h3>
-              <ResponsiveBadge tone="bondi">3</ResponsiveBadge>
-            </div>
-            <div className="space-y-3">
-              {[
-                { nombre: "María González", hora: "09:30", tipo: "Control" },
-                { nombre: "Carlos Rodríguez", hora: "10:15", tipo: "Primera vez" },
-                { nombre: "Ana Martínez", hora: "11:00", tipo: "Seguimiento" }
-              ].map((cita, i) => (
-                <div key={i} className="flex items-center justify-between p-3 bg-sinbad-50 rounded-lg border border-sinbad-200 hover:shadow-soft transition-all">
-                  <div>
-                    <div className="font-medium text-eden-800 text-sm">{cita.nombre}</div>
-                    <div className="text-xs text-eden-600">{cita.tipo}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-medium text-eden-800 text-sm">{cita.hora}</div>
-                    <ResponsiveBadge tone="health">Confirmada</ResponsiveBadge>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </ResponsiveCard>
-
-          <ResponsiveCard>
-            <h3 className="font-semibold text-eden-800 mb-4">Alertas del sistema</h3>
-            <div className="space-y-3">
-              <div className="flex items-start gap-3 p-3 bg-janna-100 rounded-lg border border-janna-200">
-                <AlertTriangle className="w-5 h-5 text-janna-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <div className="text-sm font-medium text-eden-800">Campos incompletos</div>
-                  <div className="text-xs text-eden-600">HC: antecedentes familiares</div>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 p-3 bg-bondi-50 rounded-lg border border-bondi-200">
-                <CheckCircle className="w-5 h-5 text-bondi-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <div className="text-sm font-medium text-bondi-800">Exportación exitosa</div>
-                  <div className="text-xs text-bondi-600">Última exportación RIPS</div>
-                </div>
-              </div>
-            </div>
-          </ResponsiveCard>
-        </div>
-      )}
     </div>
   );
 }
@@ -4950,16 +4738,182 @@ function DashboardEpidemioView({ deviceType }: any) {
 }
 
 function ConfiguracionView({ deviceType }: any) {
+  const { user } = useAuth();
+  const currentRole = user?.role || 'medico';
+  const [ttsText, setTtsText] = useState("");
+  const [isTtsLoading, setIsTtsLoading] = useState(false);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const audioRef = React.useRef<HTMLAudioElement | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
+  const audioChunksRef = React.useRef<Blob[]>([]);
+  const [transcript, setTranscript] = useState<string>("");
+  const { provider: sttProvider, setProvider: setSttProvider } = useSttProvider();
+  const sttProviderOptions = [
+    { value: 'whisper', label: 'Whisper Local (Deshabilitado temporalmente)' },
+    { value: 'huggingface', label: 'Hugging Face (API)' },
+    { value: 'elevenlabs', label: 'ElevenLabs (API · recomendado)' }
+  ];
+
   return (
     <div className="space-y-4 md:space-y-6">
       <ResponsiveCard>
         <h3 className="font-semibold text-stone-900 mb-4">Configuración</h3>
         <div className="space-y-4">
-          <div className="text-center py-8 text-stone-500 text-sm">
-            Opciones de configuración próximamente
+          <div className="text-sm text-stone-600 mb-6">
+            Herramientas y configuraciones del sistema
           </div>
         </div>
       </ResponsiveCard>
+
+      {/* Herramienta IA: Texto a voz */}
+      {ENABLE_TTS && ['medico','psicologo','auxiliar_enfermeria','enfermero_jefe','fisioterapeuta','nutricionista','fonoaudiologo','odontologo'].includes(currentRole) ? (
+        <ResponsiveCard>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-eden-800">Asistente de voz (ElevenLabs)</h3>
+            <ResponsiveBadge tone="info">TTS</ResponsiveBadge>
+          </div>
+          <div className={`grid gap-3 ${deviceType === 'mobile' ? 'grid-cols-1' : 'grid-cols-6'}`}>
+            <div className={deviceType === 'mobile' ? '' : 'col-span-5'}>
+              <ResponsiveField label="Texto a convertir a voz">
+                <ResponsiveInput
+                  placeholder="Ej: Paciente con dolor torácico de 2 días de evolución..."
+                  value={ttsText}
+                  onChange={(e: any) => setTtsText(e.target.value)}
+                />
+              </ResponsiveField>
+            </div>
+            <div className="flex items-end">
+              <ResponsiveButton
+                onClick={async () => {
+                  if (!ttsText || isTtsLoading) return;
+                  try {
+                    setIsTtsLoading(true);
+                    setAudioUrl(null);
+                    const resp = await fetch(`${API_BASE_URL}/tts`,{
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ texto: ttsText })
+                    });
+                    if (!resp.ok) {
+                      const err = await resp.json().catch(() => ({}));
+                      throw new Error(err?.error || 'Error generando voz');
+                    }
+                    const blob = await resp.blob();
+                    const url = URL.createObjectURL(blob);
+                    setAudioUrl(url);
+                    setTimeout(() => {
+                      if (audioRef.current) {
+                        audioRef.current.play().catch(() => {});
+                      }
+                    }, 50);
+                  } catch (e) {
+                    console.error('TTS error:', e);
+                    alert(e instanceof Error ? e.message : 'Error generando voz');
+                  } finally {
+                    setIsTtsLoading(false);
+                  }
+                }}
+                variant="primary"
+                className="w-full"
+                disabled={!ttsText || isTtsLoading}
+              >
+                {isTtsLoading ? 'Generando...' : 'Generar voz'}
+              </ResponsiveButton>
+            </div>
+          </div>
+          {audioUrl && (
+            <div className="mt-3">
+              <audio ref={audioRef} src={audioUrl} controls className="w-full" />
+            </div>
+          )}
+        </ResponsiveCard>
+      ) : ENABLE_TTS ? null : (
+        <ResponsiveCard>
+          <h3 className="font-semibold text-eden-800 mb-2">Asistente de voz (TTS)</h3>
+          <p className="text-sm text-eden-700">
+            Esta función requiere una cuenta activa de ElevenLabs. Configure su API key en el backend para habilitarla.
+          </p>
+        </ResponsiveCard>
+      )}
+
+      {/* Herramienta IA: Voz a texto */}
+      {['medico','psicologo','auxiliar_enfermeria','enfermero_jefe','fisioterapeuta','nutricionista','fonoaudiologo','odontologo'].includes(currentRole) && (
+        <ResponsiveCard>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-eden-800">Dictado médico (STT)</h3>
+            <ResponsiveBadge tone="info">STT</ResponsiveBadge>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 mb-4">
+            <ResponsiveField label="Proveedor STT">
+              <ResponsiveSelect
+                value={sttProvider}
+                onChange={(event: any) => setSttProvider(event.target.value)}
+                options={sttProviderOptions}
+              />
+            </ResponsiveField>
+            <div className="text-xs text-eden-600 md:pt-6">
+              Whisper está deshabilitado temporalmente. Usa ElevenLabs o Hugging Face como proveedor STT.
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <ResponsiveButton
+              variant={isRecording ? 'warning' : 'primary'}
+              onClick={async () => {
+                try {
+                  if (!isRecording) {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    const mr = new MediaRecorder(stream);
+                    audioChunksRef.current = [];
+                    mr.ondataavailable = (e: BlobEvent) => {
+                      if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
+                    };
+                    mr.onstop = async () => {
+                      try {
+                        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+                        const form = new FormData();
+                        form.append('audio', blob, 'audio.webm');
+                        const resp = await fetch(`${API_BASE_URL}/stt?provider=${sttProvider}`, { method: 'POST', body: form });
+                        if (!resp.ok) {
+                          let msg = 'Error transcribiendo audio';
+                          try {
+                            const err = await resp.json();
+                            msg = `${err?.error || msg}${err?.status ? ` (status ${err.status})` : ''}${err?.details ? `: ${err.details}` : ''}`;
+                          } catch {}
+                          throw new Error(msg);
+                        }
+                        const data = await resp.json();
+                        setTranscript(typeof data?.text === 'string' ? data.text : JSON.stringify(data));
+                      } catch (e) {
+                        console.error('STT error:', e);
+                        alert(e instanceof Error ? e.message : 'Error transcribiendo audio');
+                      }
+                    };
+                    mediaRecorderRef.current = mr;
+                    mr.start();
+                    setIsRecording(true);
+                  } else {
+                    mediaRecorderRef.current?.stop();
+                    setIsRecording(false);
+                  }
+                } catch (e) {
+                  console.error('Mic error:', e);
+                  alert('No se pudo acceder al micrófono');
+                }
+              }}
+            >
+              {isRecording ? 'Detener' : 'Grabar dictado'}
+            </ResponsiveButton>
+          </div>
+          {transcript && (
+            <div className="mt-3">
+              <ResponsiveField label="Transcripción">
+                <textarea className="w-full px-3 py-2 border border-sinbad-300 rounded-xl text-sm" rows={3} value={transcript} onChange={(e) => setTranscript(e.target.value)} />
+              </ResponsiveField>
+            </div>
+          )}
+        </ResponsiveCard>
+      )}
     </div>
   );
 }

@@ -52,54 +52,165 @@ app.use(express.static(path.join(__dirname, 'public')));
 const upload = multer({ dest: path.join(__dirname, 'uploads') });
 
 // Conectar a SQLite (usa la ruta correcta de tu BD)
-// En Render, copiamos la BD a /tmp para tener permisos de escritura
+// En Render, intentamos usar un volumen persistente si está disponible
 console.log('🔧 Iniciando configuración de base de datos...');
 const sourceDbPath = path.join(__dirname, 'database', 'salud_digital_aps.db');
 const tmpDbPath = '/tmp/salud_digital_aps.db';
+// Ruta persistente en Render (si tienes volumen montado)
+const persistentDbPath = process.env.DB_PATH || path.join(process.env.HOME || '/opt/render', 'persistent', 'salud_digital_aps.db');
 
 console.log('📍 Ruta fuente:', sourceDbPath);
 console.log('📍 Ruta temporal:', tmpDbPath);
+console.log('📍 Ruta persistente:', persistentDbPath);
 console.log('📍 __dirname:', __dirname);
 
+// Función para verificar permisos de escritura
+function verificarPermisosEscritura(ruta) {
+  try {
+    const testFile = path.join(ruta, '.test_write_permission');
+    fs.writeFileSync(testFile, 'test');
+    fs.unlinkSync(testFile);
+    return { tienePermisos: true, error: null };
+  } catch (err) {
+    return { tienePermisos: false, error: err.message };
+  }
+}
+
+// Verificar permisos en diferentes rutas
+console.log('\n🔐 Verificando permisos de escritura...');
+const rutasAVerificar = [
+  { nombre: 'Fuente (database/)', ruta: path.dirname(sourceDbPath) },
+  { nombre: '/tmp', ruta: '/tmp' },
+  { nombre: 'Persistente (DB_PATH)', ruta: process.env.DB_PATH ? path.dirname(persistentDbPath) : null },
+  { nombre: 'HOME/persistent', ruta: path.join(process.env.HOME || '/opt/render', 'persistent') },
+  { nombre: '__dirname', ruta: __dirname }
+];
+
+rutasAVerificar.forEach(({ nombre, ruta }) => {
+  if (!ruta) {
+    console.log(`  ⏭️  ${nombre}: No configurado`);
+    return;
+  }
+  
+  // Verificar si el directorio existe
+  const existe = fs.existsSync(ruta);
+  console.log(`  📁 ${nombre}: ${existe ? '✅ Existe' : '❌ No existe'}`);
+  
+  if (existe) {
+    const permisos = verificarPermisosEscritura(ruta);
+    if (permisos.tienePermisos) {
+      console.log(`     ✍️  Permisos de escritura: ✅ SÍ`);
+    } else {
+      console.log(`     ✍️  Permisos de escritura: ❌ NO (${permisos.error})`);
+    }
+  } else {
+    // Intentar crear el directorio
+    try {
+      fs.mkdirSync(ruta, { recursive: true });
+      console.log(`     📝 Directorio creado`);
+      const permisos = verificarPermisosEscritura(ruta);
+      if (permisos.tienePermisos) {
+        console.log(`     ✍️  Permisos de escritura: ✅ SÍ`);
+      } else {
+        console.log(`     ✍️  Permisos de escritura: ❌ NO (${permisos.error})`);
+      }
+    } catch (err) {
+      console.log(`     ❌ No se pudo crear: ${err.message}`);
+    }
+  }
+});
+
+console.log(''); // Línea en blanco
+  
 // Determinar qué ruta usar
-// NOTA: En Render siempre usamos /tmp para tener permisos de escritura
-// Ignoramos DB_PATH si está configurado para evitar problemas de permisos
+// Prioridad: 1) DB_PATH (persistente), 2) /tmp (temporal), 3) fuente
 let dbPath = null;
 
-console.log('🔍 Verificando archivo fuente...');
+console.log('🔍 Verificando archivos...');
 const sourceExists = fs.existsSync(sourceDbPath);
-console.log('🔍 Archivo fuente existe:', sourceExists);
-
 const tmpExists = fs.existsSync(tmpDbPath);
-console.log('🔍 Archivo en /tmp existe:', tmpExists);
+const persistentExists = fs.existsSync(persistentDbPath);
 
-// Siempre intentar usar /tmp (ignorar DB_PATH en Render)
-if (sourceExists && !tmpExists) {
+console.log('🔍 Archivo fuente existe:', sourceExists);
+console.log('🔍 Archivo en /tmp existe:', tmpExists);
+console.log('🔍 Archivo persistente existe:', persistentExists);
+
+// Crear directorio persistente si no existe
+if (process.env.DB_PATH) {
+  const persistentDir = path.dirname(persistentDbPath);
+  if (!fs.existsSync(persistentDir)) {
+    try {
+      fs.mkdirSync(persistentDir, { recursive: true });
+      console.log('✅ Directorio persistente creado:', persistentDir);
+    } catch (err) {
+      console.warn('⚠️  No se pudo crear directorio persistente:', err.message);
+    }
+  }
+}
+
+// Prioridad 1: Usar ruta persistente si está configurada y existe
+if (process.env.DB_PATH && persistentExists) {
+  console.log('✅ Usando base de datos persistente:', persistentDbPath);
+  dbPath = persistentDbPath;
+}
+// Prioridad 2: Si hay persistente configurado pero no existe, copiar desde fuente
+else if (process.env.DB_PATH && sourceExists && !persistentExists) {
+  console.log('📋 Copiando base de datos a ruta persistente...');
+  try {
+    fs.copyFileSync(sourceDbPath, persistentDbPath);
+    console.log('✅ Base de datos copiada a ruta persistente');
+    dbPath = persistentDbPath;
+  } catch (err) {
+    console.error('❌ Error copiando a persistente:', err.message);
+    console.log('⚠️  Fallback a /tmp');
+    // Continuar con lógica de /tmp
+    if (sourceExists && !tmpExists) {
+      try {
+        fs.copyFileSync(sourceDbPath, tmpDbPath);
+        console.log('✅ Base de datos copiada a /tmp');
+        dbPath = tmpDbPath;
+      } catch (err2) {
+        console.error('❌ Error copiando a /tmp:', err2.message);
+        dbPath = sourceDbPath;
+      }
+    } else if (tmpExists) {
+      dbPath = tmpDbPath;
+    } else {
+      dbPath = sourceDbPath;
+    }
+  }
+}
+// Prioridad 3: Usar /tmp si existe (compatibilidad con despliegues anteriores)
+else if (tmpExists) {
+  console.log('⚠️  Usando base de datos en /tmp (temporal - se perderá en el próximo despliegue)');
+  console.log('💡 Recomendación: Configura DB_PATH en Render para persistencia');
+  dbPath = tmpDbPath;
+}
+// Prioridad 4: Copiar desde fuente a /tmp si no existe
+else if (sourceExists && !tmpExists) {
   console.log('📋 Copiando base de datos de', sourceDbPath, 'a', tmpDbPath);
   try {
     fs.copyFileSync(sourceDbPath, tmpDbPath);
     console.log('✅ Base de datos copiada exitosamente a /tmp');
+    console.log('⚠️  ADVERTENCIA: /tmp es temporal. Los datos se perderán en el próximo despliegue.');
+    console.log('💡 Para persistencia, configura DB_PATH en Render (ej: /opt/render/persistent/salud_digital_aps.db)');
     dbPath = tmpDbPath;
   } catch (err) {
     console.error('❌ Error copiando BD a /tmp:', err.message);
     console.log('⚠️  Intentando usar ruta original como fallback');
     dbPath = sourceDbPath;
   }
-} else if (tmpExists) {
-  console.log('✅ Usando base de datos existente en /tmp');
-  dbPath = tmpDbPath;
-} else if (sourceExists) {
-  console.log('⚠️  Archivo fuente existe pero no se pudo copiar, usando fuente');
-  dbPath = sourceDbPath;
-} else {
-  console.log('⚠️  Ningún archivo encontrado, usando /tmp (se creará vacío)');
-  dbPath = tmpDbPath;
 }
-
-// Si DB_PATH está configurado pero no es /tmp, advertir
-if (process.env.DB_PATH && process.env.DB_PATH !== tmpDbPath) {
-  console.log('⚠️  DB_PATH está configurado pero se está usando /tmp para evitar problemas de permisos');
-  console.log('⚠️  DB_PATH configurado:', process.env.DB_PATH);
+// Prioridad 5: Usar fuente directamente
+else if (sourceExists) {
+  console.log('⚠️  Usando archivo fuente directamente');
+  dbPath = sourceDbPath;
+}
+// Último recurso: crear en /tmp
+else {
+  console.log('⚠️  Ningún archivo encontrado, usando /tmp (se creará vacío)');
+  console.log('⚠️  ADVERTENCIA: Los datos en /tmp se perderán en el próximo despliegue');
+  dbPath = tmpDbPath;
 }
 
 console.log('📊 Base de datos final: ', dbPath);
