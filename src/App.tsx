@@ -9,6 +9,7 @@ import { syncPatient, createCondition, createMedicationRequest, createMedication
 import { buildPatientResource, buildConditionResources, buildMedicationRequestResources, buildMedicationResources, buildEncounterResource, buildObservationResources, buildCompositionResource, buildPractitionerResource } from "./utils/fhirMappers";
 import { ConsultarADRESButton } from "./components/ConsultarADRESButton";
 import { API_BASE_URL, ENABLE_TTS } from "./config/api";
+import { FHIR_THROTTLE, delay as throttleDelay } from "./config/fhirThrottle";
 import { AntecedentesFamiliares } from "./components/AntecedentesFamiliares";
 import FHIRDemoView from "./components/FHIRDemoView";
 import { useSttProvider } from "./contexts/SttProviderContext";
@@ -68,6 +69,10 @@ import {
   LogOut
 } from "lucide-react";
 import { AuthService } from "./services/authService";
+
+const OBSERVATION_BATCH_SIZE = Math.max(1, FHIR_THROTTLE.OBSERVATION_BATCH_SIZE);
+const OBSERVATION_BATCH_DELAY_MS = Math.max(0, FHIR_THROTTLE.OBSERVATION_BATCH_DELAY_MS);
+const wait = throttleDelay;
 
 // Configuración completa de todos los roles de usuario
 export const USER_ROLES = {
@@ -2246,6 +2251,19 @@ function ConsultaFormView({ patient, deviceType }: any) {
       if (patient) {
         setFhirSyncStatus('syncing');
         try {
+          const failedFhirItems: Array<{ type: string; detail: string }> = [];
+          const registerFailure = (type: string, reason: any) => {
+            const detail =
+              typeof reason === 'string'
+                ? reason
+                : reason?.message ||
+                  reason?.response?.data?.error ||
+                  reason?.response?.data?.details ||
+                  'Error desconocido';
+            console.warn(`[FHIR Sync] ${type} no sincronizado: ${detail}`, reason);
+            failedFhirItems.push({ type, detail });
+          };
+
           // 1. Obtener o crear Practitioner en FHIR
           let practitionerReference: string | undefined;
           let practitionerName: string | undefined;
@@ -2305,12 +2323,15 @@ function ConsultaFormView({ patient, deviceType }: any) {
 
           const conditionReferences: string[] = [];
           if (conditionResources.length > 0) {
-            const conditionResults = await Promise.all(
+            const conditionResults = await Promise.allSettled(
               conditionResources.map((resource) => createCondition(resource))
             );
-            conditionResults.forEach((result: any) => {
-              if (result.resource?.id) {
-                conditionReferences.push(`Condition/${result.resource.id}`);
+            conditionResults.forEach((result, index) => {
+              if (result.status === 'fulfilled' && result.value?.resource?.id) {
+                conditionReferences.push(`Condition/${result.value.resource.id}`);
+              } else {
+                registerFailure('Condition', result.status === 'rejected' ? result.reason : 'Respuesta inválida');
+                console.debug('Condition payload fallido:', conditionResources[index]);
               }
             });
           }
@@ -2344,14 +2365,24 @@ function ConsultaFormView({ patient, deviceType }: any) {
             });
 
             if (observationResources.length > 0) {
-              const observationResults = await Promise.all(
-                observationResources.map((resource) => createObservation(resource))
-              );
-              observationResults.forEach((result: any) => {
-                if (result.resource?.id) {
-                  observationReferences.push(`Observation/${result.resource.id}`);
+              for (let i = 0; i < observationResources.length; i += OBSERVATION_BATCH_SIZE) {
+                const batch = observationResources.slice(i, i + OBSERVATION_BATCH_SIZE);
+                const batchResults = await Promise.allSettled(
+                  batch.map((resource) => createObservation(resource))
+                );
+                batchResults.forEach((result, idx) => {
+                  if (result.status === 'fulfilled' && result.value?.resource?.id) {
+                    observationReferences.push(`Observation/${result.value.resource.id}`);
+                  } else {
+                    registerFailure('Observation', result.status === 'rejected' ? result.reason : 'Respuesta inválida');
+                    console.debug('Observation payload fallido:', batch[idx]);
+                  }
+                });
+
+                if (i + OBSERVATION_BATCH_SIZE < observationResources.length && OBSERVATION_BATCH_DELAY_MS > 0) {
+                  await wait(OBSERVATION_BATCH_DELAY_MS);
                 }
-              });
+              }
             }
           }
 
@@ -2375,6 +2406,12 @@ function ConsultaFormView({ patient, deviceType }: any) {
             await createComposition(compositionResource);
           }
 
+          if (failedFhirItems.length > 0) {
+            console.warn('[FHIR Sync] Recursos con errores pendientes:', failedFhirItems);
+            alert(
+              `Historia clínica sincronizada con advertencias: ${failedFhirItems.length} recursos FHIR no se enviaron. Revisa la consola para más detalles.`
+            );
+          }
           setFhirSyncStatus('success');
         } catch (fhirError) {
           console.error('❌ Error sincronizando con FHIR:', fhirError);

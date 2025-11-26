@@ -9,14 +9,14 @@ Scripts para cargar catálogos mínimos en Ontoserver.
 
 ## Archivo de datos
 
-Copiar los catálogos oficiales en `scripts/etl/data/`:
+Copiar los catálogos oficiales en `backend/terminology-data/` (la carpeta se empaqueta con el backend para que esté disponible en producción):
 
 | Archivo | Fuente sugerida | Columnas relevantes |
 |---------|-----------------|---------------------|
 | `cie10_colombia.csv` | Clasificación Internacional de Enfermedades (CIE-10). Puede descargarse del portal del Ministerio de Salud / DANE y exportarse a CSV (columnas `Código`, `Descripción`). | Código CIE10, descripción |
 | `cum_medicamentos.csv` | Código Único de Medicamentos (CUM) vigentes – datos abiertos: <https://www.datos.gov.co/d/i7cb-raxc> (descarga `rows.csv?accessType=DOWNLOAD`). | `expedientecum` (o `codigo_cum`), `descripcioncomercial`, `atc` |
 
-Los archivos `cie10_subset.csv` y `meds_subset.csv` se mantienen como respaldo para entornos de prueba. El script prioriza los catálogos oficiales si existen.
+Los archivos `cie10_subset.csv` y `meds_subset.csv` se mantienen como respaldo para entornos de prueba. El script prioriza los catálogos oficiales si existen. Si sigues usando la ruta legacy `scripts/etl/data/`, el script también la detectará, pero se recomienda mantener los datos en `backend/terminology-data/`.
 
 ## Ejecución
 

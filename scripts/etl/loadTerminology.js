@@ -117,20 +117,28 @@ async function main() {
   console.log(`➡️  URL base: ${BASE_URL}`);
 
   // === CIE10 ===
+  const dataDirectories = [
+    path.join(__dirname, 'data'), // ubicación legacy
+    path.join(__dirname, '../../backend/terminology-data') // nueva ubicación dentro del backend
+  ];
+
   const cie10FileCandidates = ['cie10_colombia.csv', 'cie10_subset.csv'];
   let cie10RowsRaw = [];
   let cie10Source = null;
   for (const fileName of cie10FileCandidates) {
-    const filePath = path.join(__dirname, 'data', fileName);
-    if (fs.existsSync(filePath)) {
-      cie10RowsRaw = readCsv(filePath);
-      cie10Source = fileName;
-      break;
+    for (const dir of dataDirectories) {
+      const filePath = path.join(dir, fileName);
+      if (fs.existsSync(filePath)) {
+        cie10RowsRaw = readCsv(filePath);
+        cie10Source = fileName;
+        break;
+      }
     }
+    if (cie10Source) break;
   }
 
   if (!cie10Source) {
-    throw new Error('No se encontró ningún archivo de CIE10 en scripts/etl/data');
+    throw new Error('No se encontró ningún archivo de CIE10 en scripts/etl/data ni backend/terminology-data');
   }
 
   const cie10Rows = normalizeCIE10Rows(cie10RowsRaw);
@@ -178,16 +186,19 @@ async function main() {
   let medsRowsRaw = [];
   let medsSource = null;
   for (const fileName of medsFileCandidates) {
-    const filePath = path.join(__dirname, 'data', fileName);
-    if (fs.existsSync(filePath)) {
-      medsRowsRaw = readCsv(filePath);
-      medsSource = fileName;
-      break;
+    for (const dir of dataDirectories) {
+      const filePath = path.join(dir, fileName);
+      if (fs.existsSync(filePath)) {
+        medsRowsRaw = readCsv(filePath);
+        medsSource = fileName;
+        break;
+      }
     }
+    if (medsSource) break;
   }
 
   if (!medsSource) {
-    throw new Error('No se encontró ningún archivo de medicamentos en scripts/etl/data');
+    throw new Error('No se encontró ningún archivo de medicamentos en scripts/etl/data ni backend/terminology-data');
   }
 
   const medsRows = normalizeMedicationRows(medsRowsRaw);

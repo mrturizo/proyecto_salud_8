@@ -1,0 +1,5 @@
+[33m852d663[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m feat: agregar logs detallados para endpoints TTS y STT de ElevenLabs
+[33mc363f5c[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m refactor: update API endpoints to use dynamic base URL from configuration
+[33m97d3c5a[m fix: add sensitive key loading verification and logging in server.js
+[33mb0ff9d1[m fix: empaquetar datos de terminología dentro del backend
+[33m8b4fe94[m fix: update default backend URL to Render service for API configuration

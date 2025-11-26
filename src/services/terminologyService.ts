@@ -7,10 +7,8 @@ export interface TerminologyOption {
   designation?: Array<Record<string, any>>;
 }
 
-const API_URL = API_BASE_URL;
-
 async function get<T>(endpoint: string): Promise<T> {
-  const response = await fetch(`${API_URL}${endpoint}`);
+  const response = await fetch(`${API_BASE_URL}${endpoint}`);
   if (!response.ok) {
     throw new Error(`Terminology request failed: ${response.status}`);
   }
@@ -36,7 +34,7 @@ interface ValidateCodePayload {
 }
 
 export async function validateCode(payload: ValidateCodePayload) {
-  const response = await fetch(`${API_URL}/terminology/validate`, {
+  const response = await fetch(`${API_BASE_URL}/terminology/validate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)

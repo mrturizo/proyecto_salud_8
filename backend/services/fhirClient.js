@@ -3,6 +3,11 @@ const fetch = require('node-fetch');
 const BASE_URL = process.env.FHIR_BASE_URL || 'https://hapi.fhir.org/baseR4';
 const USERNAME = process.env.FHIR_USERNAME;
 const PASSWORD = process.env.FHIR_PASSWORD;
+const DEFAULT_MAX_RETRIES = parseInt(process.env.FHIR_MAX_RETRIES || '4', 10);
+const BASE_DELAY_MS = parseInt(process.env.FHIR_BACKOFF_BASE_MS || '500', 10);
+const MAX_DELAY_MS = parseInt(process.env.FHIR_BACKOFF_MAX_MS || '10000', 10);
+const JITTER_MS = parseInt(process.env.FHIR_BACKOFF_JITTER_MS || '250', 10);
+const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504, 522, 524]);
 
 function getAuthHeaders() {
   if (USERNAME && PASSWORD) {
@@ -12,7 +17,15 @@ function getAuthHeaders() {
   return {};
 }
 
-async function fhirRequest(method, resourceType, body, resourceId, queryString, retries = 2) {
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function calculateDelay(attempt) {
+  const exponentialDelay = BASE_DELAY_MS * Math.pow(2, attempt);
+  const jitter = Math.floor(Math.random() * JITTER_MS);
+  return Math.min(exponentialDelay + jitter, MAX_DELAY_MS);
+}
+
+async function fhirRequest(method, resourceType, body, resourceId, queryString, retries = DEFAULT_MAX_RETRIES) {
   const urlParts = [BASE_URL, resourceType];
   if (resourceId) {
     urlParts.push(resourceId);
@@ -49,20 +62,18 @@ async function fhirRequest(method, resourceType, body, resourceId, queryString, 
         
         const errorMsg = `FHIR ${method} ${resourceType} failed: ${response.status} - ${errorDetails}`;
         console.error(`[FHIR Client] Error (intento ${attempt + 1}/${retries + 1}): ${errorMsg}`);
-        
-        // No reintentar para errores 4xx (errores del cliente)
-        if (response.status >= 400 && response.status < 500) {
-          throw new Error(errorMsg);
-        }
-        
-        // Reintentar para errores 5xx o de red
-        if (attempt < retries) {
-          const delay = Math.pow(2, attempt) * 1000; // Backoff exponencial
-          console.log(`[FHIR Client] Reintentando en ${delay}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
+
+        const shouldRetry =
+          response.status >= 500 ||
+          RETRYABLE_STATUS.has(response.status);
+
+        if (shouldRetry && attempt < retries) {
+          const delay = calculateDelay(attempt);
+          console.warn(`[FHIR Client] Respuesta ${response.status}. Reintentando en ${delay}ms...`);
+          await wait(delay);
           continue;
         }
-        
+
         throw new Error(errorMsg);
       }
 
@@ -73,9 +84,9 @@ async function fhirRequest(method, resourceType, body, resourceId, queryString, 
       if (error.code === 'ECONNREFUSED' || error.message.includes('fetch failed') || error.message.includes('network')) {
         const errorMsg = `No se puede conectar al servidor FHIR en ${BASE_URL}. Verifica que el servidor esté corriendo o actualiza FHIR_BASE_URL en .env`;
         if (attempt < retries) {
-          const delay = Math.pow(2, attempt) * 1000;
+          const delay = calculateDelay(attempt);
           console.log(`[FHIR Client] Error de conexión. Reintentando en ${delay}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
+          await wait(delay);
           continue;
         }
         throw new Error(errorMsg);
@@ -87,9 +98,9 @@ async function fhirRequest(method, resourceType, body, resourceId, queryString, 
       }
       
       // Reintentar para timeouts
-      const delay = Math.pow(2, attempt) * 1000;
+      const delay = calculateDelay(attempt);
       console.log(`[FHIR Client] Timeout. Reintentando en ${delay}ms...`);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await wait(delay);
     }
   }
 }

@@ -167,3 +167,4 @@ Por lo tanto, esta vista permite verificar que la sincronización automática fu
 - Exportar recursos a JSON/XML
 - Visualización gráfica de relaciones entre recursos
 
+

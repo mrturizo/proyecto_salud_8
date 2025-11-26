@@ -306,7 +306,22 @@ curl http://localhost:8180/fhir/metadata
 
 ---
 
-## 9. Próximos pasos inmediatos
+## 9. Gestión de throttling del servidor FHIR público
+
+- El gateway usa el servidor compartido `https://hapi.fhir.org/baseR4`, el cual limita la tasa de peticiones. Cuando ocurre un `429 Too Many Requests`, el backend reintenta automáticamente con backoff exponencial y jitter configurable mediante:
+  - `FHIR_MAX_RETRIES`
+  - `FHIR_BACKOFF_BASE_MS`
+  - `FHIR_BACKOFF_MAX_MS`
+  - `FHIR_BACKOFF_JITTER_MS`
+- En frontend se agregó `src/config/fhirThrottle.ts` para controlar el tamaño de lote y la espera entre peticiones de Observations. Variables disponibles:
+  - `VITE_FHIR_MAX_RETRIES`
+  - `VITE_FHIR_BASE_DELAY_MS`
+  - `VITE_FHIR_OBSERVATION_BATCH_SIZE`
+  - `VITE_FHIR_OBSERVATION_BATCH_DELAY_MS`
+- Las Observations se envían por lotes pequeños, se espera entre lotes y se registran los recursos que no pudieron sincronizarse. La UI muestra un aviso cuando ocurre alguna advertencia.
+- Recomendación: para producción se debe desplegar un servidor HAPI dedicado (sandbox Docker/Render) para eliminar los límites del servicio público.
+
+## 10. Próximos pasos inmediatos
 
 1. Validar esta matriz con el equipo legal y funcional para precisar artículos, numerales y priorización.
 2. Definir responsables y fechas para cada brecha identificada.
