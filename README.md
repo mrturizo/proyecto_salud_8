@@ -1,5 +1,48 @@
 # Proyecto Salud Digital APS
 
+## Acceso a la App (Producción)
+Frontend:
+https://proyectosalud8.vercel.app/
+
+
+Backend:
+https://proyecto-salud-digital-2.onrender.com/
+
+## Cuentas demo:
+👨‍⚕️ MÉDICO
+   Email: medico1@saludigital.edu.co
+   Password: 1000000001
+
+🧠 PSICÓLOGO
+   Email: psicologo@salud.com
+   Password: psic123
+
+👩‍⚕️ AUXILIAR DE ENFERMERÍA
+   Email: auxiliar@salud.com
+   Password: aux123
+
+🛡️ ENFERMERO JEFE
+   Email: enfermerojefe@salud.com
+   Password: 11223344
+
+🏋🏻‍♀️FISIOTERAPEUTA
+Email: fisioterapeuta@salud.com
+Password: 900000001
+
+🥜NUTRICIONISTA 
+Email: nutricionista@salud.com
+Password: nutri123
+
+🦻🏻FONOAUDIOLOGO
+Email: fonoaudiologo@salud.com
+Password: fono123/900000003
+
+🦷ODONTOLOGO
+Email: odontologo@salud.com
+Password: odonto123/900000004
+
+
+
 ## 📋 Descripción General
 
 **Salud Digital APS** es un sistema de gestión integral para programas de Atención Primaria en Salud (APS). Su objetivo es optimizar el registro de información clínica y administrativa, facilitar la gestión de pacientes y familias, y proveer herramientas de apoyo para los profesionales de la salud.
@@ -39,7 +82,7 @@ El sistema cuenta con una arquitectura de aplicación web moderna, con un fronte
 - **Node.js** (v18 o superior)
 - **npm** (o un gestor de paquetes equivalente)
 - **Python** (v3.x) con las librerías `scikit-learn` y `numpy`.
-- Un servidor **HAPI FHIR** en ejecución (para la funcionalidad de interoperabilidad). Puede usar la configuración de Docker en `sandbox/hapi-fhir/`.
+- **Servidor FHIR** (opcional): El sistema usa HAPI FHIR público por defecto (`https://hapi.fhir.org/baseR4`), no requiere configuración adicional. Para desarrollo local, puede usar Docker con la configuración en `sandbox/hapi-fhir/`.
 
 ### **1. Configuración del Backend**
 
@@ -60,18 +103,26 @@ c. **Cree el archivo de variables de entorno:**
    # Ruta a la base de datos SQLite
    DB_PATH=./salud_digital_aps.db
 
-   # URL del servidor FHIR (usar el de HAPI FHIR si se ejecuta localmente)
-   FHIR_BASE_URL=http://localhost:8080/fhir
+   # URL del servidor FHIR
+   # Opción 1: HAPI FHIR público (recomendado para estudiantes, no requiere configuración)
+   FHIR_BASE_URL=https://hapi.fhir.org/baseR4
+   # Opción 2: HAPI FHIR local (requiere Docker)
+   # FHIR_BASE_URL=http://localhost:8080/hapi-fhir-jpaserver/fhir
 
-   # --- Claves de API (Opcionales pero recomendadas) ---
+   # --- Claves de API (Opcionales) ---
 
-   # API Key de ElevenLabs para las funciones de Speech-to-Text y Text-to-Speech
+   # Speech-to-Text: Whisper local (GRATUITO, sin límites) - RECOMENDADO
+   # No requiere configuración adicional, funciona automáticamente
+   STT_DEFAULT_PROVIDER=whisper
+   WHISPER_MODEL=base  # Opciones: tiny, base, small, medium, large (base recomendado)
+
+   # API Key de ElevenLabs (opcional, alternativa a Whisper)
    ELEVENLABS_API_KEY=tu_api_key_de_elevenlabs
 
-   # Hugging Face Inference API (STT por defecto)
-   HF_API_TOKEN=tu_token_de_huggingface
-   HF_STT_MODEL=openai/whisper-small
-   STT_DEFAULT_PROVIDER=huggingface
+   # Hugging Face (opcional, no funciona en plan gratuito)
+   # HF_API_TOKEN=tu_token_de_huggingface
+   # HF_STT_MODEL=openai/whisper-small
+   # STT_DEFAULT_PROVIDER=huggingface
 
    # API Key de Apitude para consultar ADRES/BDUA
    # Obtenga su clave en: https://apitude.co
@@ -109,13 +160,23 @@ d. **Variables opcionales (.env.local):**
 
 ### **3. Configuración del Entorno de IA (Python)**
 
-a. **Asegúrese de tener Python instalado.**
+a. **Asegúrese de tener Python 3.8+ instalado.**
 
 b. **Instale las dependencias necesarias:**
    ```bash
+   # Dependencias para IA/ML
    pip install scikit-learn numpy
+   
+   # Dependencias para Whisper (STT local gratuito)
+   cd backend/integrations/whisper_stt
+   pip install -r requirements.txt
+   cd ../../..
    ```
-   El `aiService.js` del backend buscará un ejecutable de Python y validará que estas librerías estén disponibles para usar el endpoint de predicción.
+   
+   **Nota sobre Whisper:**
+   - Whisper se descarga automáticamente la primera vez que se usa (modelo `base` ~74 MB)
+   - Los modelos se guardan en `~/.cache/whisper/`
+   - El `aiService.js` del backend buscará un ejecutable de Python y validará que estas librerías estén disponibles
 
 ---
 

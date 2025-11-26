@@ -5,11 +5,12 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { UserProfile } from "./components/UserProfile";
 import { STTButton } from "./components/STTButton";
 import { TerminologyAutocomplete } from "./components/TerminologyAutocomplete";
-import { syncPatient, createCondition, createMedicationRequest, createMedication } from "./services/fhirService";
-import { buildPatientResource, buildConditionResources, buildMedicationRequestResources, buildMedicationResources } from "./utils/fhirMappers";
+import { syncPatient, createCondition, createMedicationRequest, createMedication, createEncounter, createObservation, createComposition } from "./services/fhirService";
+import { buildPatientResource, buildConditionResources, buildMedicationRequestResources, buildMedicationResources, buildEncounterResource, buildObservationResources, buildCompositionResource } from "./utils/fhirMappers";
 import { ConsultarADRESButton } from "./components/ConsultarADRESButton";
 import { API_BASE_URL, ENABLE_TTS } from "./config/api";
 import { AntecedentesFamiliares } from "./components/AntecedentesFamiliares";
+import FHIRDemoView from "./components/FHIRDemoView";
 import { useSttProvider } from "./contexts/SttProviderContext";
 
 import { 
@@ -84,6 +85,7 @@ export const USER_ROLES = {
     sidebarSections: [
       { key: "bd-pacientes", label: "BD Pacientes", icon: Search },
       { key: "dashboard-epidemio", label: "Dashboard", icon: BarChart3 },
+      { key: "fhir-demo", label: "Interoperabilidad FHIR", icon: Globe },
       { key: "configuracion", label: "Configuración", icon: Settings },
       { key: "ayuda", label: "Ayuda", icon: HelpCircle }
     ]
@@ -2206,26 +2208,108 @@ function ConsultaFormView({ patient, deviceType }: any) {
       if (patient) {
         setFhirSyncStatus('syncing');
         try {
+          const practitioner = {
+            id: user?.id,
+            name: user?.name || (user as any)?.nombre
+          };
+
+          // 1. Sincronizar Patient
           const { resource: patientResource, patientId: fhirPatientId } = buildPatientResource(patient);
           const identifierValue = patient.documento || patient.numero_documento || patient.id?.toString();
           await syncPatient(patientResource, identifierValue);
+          const patientReference = `Patient/${fhirPatientId}`;
 
+          // 2. Crear Encounter
+          let encounterReference: string | undefined;
+          if (nuevaAtencionId) {
+            const { resource: encounterResource, encounterId: fhirEncounterId } = buildEncounterResource({
+              atencion: {
+                atencion_id: nuevaAtencionId,
+                paciente_id: patient.id,
+                usuario_id: user?.id || 0,
+                fecha_atencion: new Date().toISOString().split('T')[0],
+                tipo_atencion: 'Consulta Médica',
+                estado: 'Completada'
+              },
+              patientReference,
+              practitioner
+            });
+            const encounterResult = await createEncounter(encounterResource);
+            encounterReference = `Encounter/${fhirEncounterId}`;
+          }
+
+          // 3. Crear Conditions (diagnósticos)
           const diagnosticosTotales = [diagnosticoPrincipal, ...diagnosticosRelacionados].filter(
             (value, index, self) => value && self.indexOf(value) === index
           );
 
           const conditionResources = buildConditionResources({
             diagnosticos: diagnosticosTotales,
-            patientReference: `Patient/${fhirPatientId}`,
-            encounterId: nuevaAtencionId,
-            practitioner: {
-              id: user?.id,
-              name: user?.name || (user as any)?.nombre
-            }
+            patientReference,
+            encounterId: nuevaAtencionId || undefined,
+            practitioner
           });
 
+          const conditionReferences: string[] = [];
           if (conditionResources.length > 0) {
-            await Promise.all(conditionResources.map((resource) => createCondition(resource)));
+            const conditionResults = await Promise.all(
+              conditionResources.map((resource) => createCondition(resource))
+            );
+            conditionResults.forEach((result: any) => {
+              if (result.resource?.id) {
+                conditionReferences.push(`Condition/${result.resource.id}`);
+              }
+            });
+          }
+
+          // 4. Crear Observations (signos vitales)
+          const observationReferences: string[] = [];
+          if (encounterReference) {
+            const observationResources = buildObservationResources({
+              signosVitales: {
+                tension_arterial_sistolica: tensionSistolica || undefined,
+                tension_arterial_diastolica: tensionDiastolica || undefined,
+                frecuencia_cardiaca: frecuenciaCardiaca || undefined,
+                frecuencia_respiratoria: frecuenciaRespiratoria || undefined,
+                saturacion_oxigeno: saturacionOxigeno || undefined,
+                temperatura: temperatura || undefined,
+                peso: peso || undefined,
+                talla: talla || undefined,
+                imc: imc || undefined,
+                glucometria: glucometria || undefined,
+                glasgow: glasgow || undefined
+              },
+              patientReference,
+              encounterReference,
+              practitioner,
+              fechaObservacion: new Date().toISOString()
+            });
+
+            if (observationResources.length > 0) {
+              const observationResults = await Promise.all(
+                observationResources.map((resource) => createObservation(resource))
+              );
+              observationResults.forEach((result: any) => {
+                if (result.resource?.id) {
+                  observationReferences.push(`Observation/${result.resource.id}`);
+                }
+              });
+            }
+          }
+
+          // 5. Crear Composition (historia clínica completa)
+          if (encounterReference) {
+            const { resource: compositionResource } = buildCompositionResource({
+              encounterReference,
+              patientReference,
+              conditionReferences,
+              observationReferences,
+              practitioner,
+              fechaComposicion: new Date().toISOString(),
+              tipoDocumento: 'Historia Clínica de Medicina General',
+              titulo: `Historia Clínica - ${patient.nombre || 'Paciente'}`
+            });
+            await createComposition(compositionResource);
           }
 
           setFhirSyncStatus('success');
@@ -9201,6 +9285,8 @@ export default function App() {
         return <DashboardEpidemioView deviceType={deviceType} />;
       case "configuracion":
         return <ConfiguracionView deviceType={deviceType} />;
+      case "fhir-demo":
+        return <FHIRDemoView />;
       case "ayuda":
         return <AyudaView deviceType={deviceType} />;
       default:

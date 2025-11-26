@@ -1,6 +1,6 @@
 const fetch = require('node-fetch');
 
-const BASE_URL = process.env.FHIR_BASE_URL || 'http://localhost:8080/hapi-fhir-jpaserver/fhir';
+const BASE_URL = process.env.FHIR_BASE_URL || 'https://hapi.fhir.org/baseR4';
 const USERNAME = process.env.FHIR_USERNAME;
 const PASSWORD = process.env.FHIR_PASSWORD;
 
@@ -12,7 +12,7 @@ function getAuthHeaders() {
   return {};
 }
 
-async function fhirRequest(method, resourceType, body, resourceId, queryString) {
+async function fhirRequest(method, resourceType, body, resourceId, queryString, retries = 2) {
   const urlParts = [BASE_URL, resourceType];
   if (resourceId) {
     urlParts.push(resourceId);
@@ -24,33 +24,73 @@ async function fhirRequest(method, resourceType, body, resourceId, queryString) 
 
   console.log(`[FHIR Client] ${method} ${url}`);
   
-  try {
-    const response = await fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/fhir+json',
-        Accept: 'application/fhir+json',
-        ...getAuthHeaders()
-      },
-      body: body ? JSON.stringify(body) : undefined,
-      timeout: 30000 // 30 segundos timeout
-    });
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/fhir+json',
+          Accept: 'application/fhir+json',
+          ...getAuthHeaders()
+        },
+        body: body ? JSON.stringify(body) : undefined,
+        timeout: 30000 // 30 segundos timeout
+      });
 
-    if (!response.ok) {
-      const text = await response.text();
-      const errorMsg = `FHIR ${method} ${resourceType} failed: ${response.status} ${text}`;
-      console.error(`[FHIR Client] Error: ${errorMsg}`);
-      throw new Error(errorMsg);
-    }
+      if (!response.ok) {
+        const text = await response.text();
+        let errorDetails = text;
+        try {
+          const errorJson = JSON.parse(text);
+          errorDetails = errorJson.issue?.[0]?.diagnostics || errorJson.error || text;
+        } catch {
+          // Si no es JSON, usar el texto tal cual
+        }
+        
+        const errorMsg = `FHIR ${method} ${resourceType} failed: ${response.status} - ${errorDetails}`;
+        console.error(`[FHIR Client] Error (intento ${attempt + 1}/${retries + 1}): ${errorMsg}`);
+        
+        // No reintentar para errores 4xx (errores del cliente)
+        if (response.status >= 400 && response.status < 500) {
+          throw new Error(errorMsg);
+        }
+        
+        // Reintentar para errores 5xx o de red
+        if (attempt < retries) {
+          const delay = Math.pow(2, attempt) * 1000; // Backoff exponencial
+          console.log(`[FHIR Client] Reintentando en ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        
+        throw new Error(errorMsg);
+      }
 
-    const result = await response.json();
-    console.log(`[FHIR Client] ${method} ${resourceType} success`);
-    return result;
-  } catch (error) {
-    if (error.code === 'ECONNREFUSED' || error.message.includes('fetch failed')) {
-      throw new Error(`No se puede conectar al servidor FHIR en ${BASE_URL}. Verifica que el servidor esté corriendo o actualiza FHIR_BASE_URL en .env`);
+      const result = await response.json();
+      console.log(`[FHIR Client] ${method} ${resourceType} success`);
+      return result;
+    } catch (error) {
+      if (error.code === 'ECONNREFUSED' || error.message.includes('fetch failed') || error.message.includes('network')) {
+        const errorMsg = `No se puede conectar al servidor FHIR en ${BASE_URL}. Verifica que el servidor esté corriendo o actualiza FHIR_BASE_URL en .env`;
+        if (attempt < retries) {
+          const delay = Math.pow(2, attempt) * 1000;
+          console.log(`[FHIR Client] Error de conexión. Reintentando en ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        throw new Error(errorMsg);
+      }
+      
+      // Si es el último intento o no es un error de red, lanzar el error
+      if (attempt >= retries || !error.message.includes('timeout')) {
+        throw error;
+      }
+      
+      // Reintentar para timeouts
+      const delay = Math.pow(2, attempt) * 1000;
+      console.log(`[FHIR Client] Timeout. Reintentando en ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
-    throw error;
   }
 }
 
@@ -91,6 +131,27 @@ async function createMedicationRequest(medicationRequestResource) {
   return fhirRequest('POST', 'MedicationRequest', medicationRequestResource);
 }
 
+async function createEncounter(encounterResource) {
+  if (!encounterResource || encounterResource.resourceType !== 'Encounter') {
+    throw new Error('Invalid Encounter resource');
+  }
+  return fhirRequest('POST', 'Encounter', encounterResource);
+}
+
+async function createObservation(observationResource) {
+  if (!observationResource || observationResource.resourceType !== 'Observation') {
+    throw new Error('Invalid Observation resource');
+  }
+  return fhirRequest('POST', 'Observation', observationResource);
+}
+
+async function createComposition(compositionResource) {
+  if (!compositionResource || compositionResource.resourceType !== 'Composition') {
+    throw new Error('Invalid Composition resource');
+  }
+  return fhirRequest('POST', 'Composition', compositionResource);
+}
+
 // ==================== READ OPERATIONS ====================
 
 async function readResource(resourceType, resourceId) {
@@ -114,6 +175,18 @@ async function readMedication(medicationId) {
 
 async function readMedicationRequest(medicationRequestId) {
   return readResource('MedicationRequest', medicationRequestId);
+}
+
+async function readEncounter(encounterId) {
+  return readResource('Encounter', encounterId);
+}
+
+async function readObservation(observationId) {
+  return readResource('Observation', observationId);
+}
+
+async function readComposition(compositionId) {
+  return readResource('Composition', compositionId);
 }
 
 // ==================== UPDATE OPERATIONS ====================
@@ -156,6 +229,27 @@ async function updateMedicationRequest(medicationRequestId, medicationRequestRes
   return updateResource('MedicationRequest', medicationRequestId, medicationRequestResource);
 }
 
+async function updateEncounter(encounterId, encounterResource) {
+  if (!encounterResource || encounterResource.resourceType !== 'Encounter') {
+    throw new Error('Invalid Encounter resource');
+  }
+  return updateResource('Encounter', encounterId, encounterResource);
+}
+
+async function updateObservation(observationId, observationResource) {
+  if (!observationResource || observationResource.resourceType !== 'Observation') {
+    throw new Error('Invalid Observation resource');
+  }
+  return updateResource('Observation', observationId, observationResource);
+}
+
+async function updateComposition(compositionId, compositionResource) {
+  if (!compositionResource || compositionResource.resourceType !== 'Composition') {
+    throw new Error('Invalid Composition resource');
+  }
+  return updateResource('Composition', compositionId, compositionResource);
+}
+
 // ==================== DELETE OPERATIONS ====================
 
 async function deleteResource(resourceType, resourceId) {
@@ -179,6 +273,18 @@ async function deleteMedication(medicationId) {
 
 async function deleteMedicationRequest(medicationRequestId) {
   return deleteResource('MedicationRequest', medicationRequestId);
+}
+
+async function deleteEncounter(encounterId) {
+  return deleteResource('Encounter', encounterId);
+}
+
+async function deleteObservation(observationId) {
+  return deleteResource('Observation', observationId);
+}
+
+async function deleteComposition(compositionId) {
+  return deleteResource('Composition', compositionId);
 }
 
 // ==================== SEARCH OPERATIONS ====================
@@ -214,6 +320,18 @@ async function searchMedicationRequests(queryParams) {
   return searchResources('MedicationRequest', queryParams);
 }
 
+async function searchEncounters(queryParams) {
+  return searchResources('Encounter', queryParams);
+}
+
+async function searchObservations(queryParams) {
+  return searchResources('Observation', queryParams);
+}
+
+async function searchCompositions(queryParams) {
+  return searchResources('Composition', queryParams);
+}
+
 // ==================== CAPABILITY STATEMENT ====================
 
 async function getCapabilityStatement() {
@@ -226,30 +344,45 @@ module.exports = {
   createCondition,
   createMedication,
   createMedicationRequest,
+  createEncounter,
+  createObservation,
+  createComposition,
   // READ operations
   readResource,
   readPatient,
   readCondition,
   readMedication,
   readMedicationRequest,
+  readEncounter,
+  readObservation,
+  readComposition,
   // UPDATE operations
   updateResource,
   updatePatient,
   updateCondition,
   updateMedication,
   updateMedicationRequest,
+  updateEncounter,
+  updateObservation,
+  updateComposition,
   // DELETE operations
   deleteResource,
   deletePatient,
   deleteCondition,
   deleteMedication,
   deleteMedicationRequest,
+  deleteEncounter,
+  deleteObservation,
+  deleteComposition,
   // SEARCH operations
   searchResources,
   searchPatients,
   searchConditions,
   searchMedications,
   searchMedicationRequests,
+  searchEncounters,
+  searchObservations,
+  searchCompositions,
   // Metadata
   getCapabilityStatement,
   helpers: {

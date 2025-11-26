@@ -177,8 +177,8 @@ curl http://localhost:8180/fhir/metadata
 - **Ruta:** `scripts/etl/`
 - **Script principal:** `node scripts/etl/loadTerminology.js --baseUrl=http://localhost:8180/fhir`
 - **Catálogos oficiales:**
-  - `scripts/etl/data/cie10_colombia.csv` → exportar desde el Ministerio de Salud / DANE (CIE-10) en formato CSV (`Código`, `Descripción`).
-  - `scripts/etl/data/cum_medicamentos.csv` → descargar desde datos abiertos INVIMA: <https://www.datos.gov.co/d/i7cb-raxc> (opción “Download” → CSV).
+  - `backend/terminology-data/cie10_colombia.csv` → exportar desde el Ministerio de Salud / DANE (CIE-10) en formato CSV (`Código`, `Descripción`).
+  - `backend/terminology-data/cum_medicamentos.csv` → descargar desde datos abiertos INVIMA: <https://www.datos.gov.co/d/i7cb-raxc> (opción “Download” → CSV).
 - **Archivos demo:** `cie10_subset.csv`, `meds_subset.csv` (solo para pruebas si no se dispone de los oficiales).
 - El script publica:
   - Catálogo oficial: `CodeSystem/cie10-colombia-oficial`, `ValueSet/vs-cie10-colombia-oficial`
@@ -204,29 +204,59 @@ curl http://localhost:8180/fhir/metadata
 
 ### 5.1 Cliente backend
 - Archivo: `backend/services/fhirClient.js`
-- Funciones: `upsertPatient`, `createCondition`, `createMedication`, `createMedicationRequest`
+- Funciones completas CRUD para todos los recursos:
+  - Patient: `upsertPatient`, `readPatient`, `updatePatient`, `deletePatient`, `searchPatients`
+  - Condition: `createCondition`, `readCondition`, `updateCondition`, `deleteCondition`, `searchConditions`
+  - Medication: `createMedication`, `readMedication`, `updateMedication`, `deleteMedication`, `searchMedications`
+  - MedicationRequest: `createMedicationRequest`, `readMedicationRequest`, `updateMedicationRequest`, `deleteMedicationRequest`, `searchMedicationRequests`
+  - Encounter: `createEncounter`, `readEncounter`, `updateEncounter`, `deleteEncounter`, `searchEncounters`
+  - Observation: `createObservation`, `readObservation`, `updateObservation`, `deleteObservation`, `searchObservations`
+  - Composition: `createComposition`, `readComposition`, `updateComposition`, `deleteComposition`, `searchCompositions`
 - Autenticación: Basic Auth opcional (`FHIR_USERNAME` + `FHIR_PASSWORD`)
+- Retry logic: Reintentos automáticos con backoff exponencial para errores de red
+- Manejo de errores mejorado: Mensajes descriptivos y logging detallado
 
 ### 5.2 Endpoints gateway
-- `POST /api/fhir/patient` (`resource`, `identifier`)
-- `POST /api/fhir/condition`
-- `POST /api/fhir/medication`
-- `POST /api/fhir/medication-request`
+- **Patient:** `POST /api/fhir/patient`, `GET /api/fhir/patient/:id`, `PUT /api/fhir/patient/:id`, `DELETE /api/fhir/patient/:id`, `GET /api/fhir/patient` (search)
+- **Condition:** `POST /api/fhir/condition`, `GET /api/fhir/condition/:id`, `PUT /api/fhir/condition/:id`, `DELETE /api/fhir/condition/:id`, `GET /api/fhir/condition` (search)
+- **Medication:** `POST /api/fhir/medication`, `GET /api/fhir/medication/:id`, `PUT /api/fhir/medication/:id`, `DELETE /api/fhir/medication/:id`, `GET /api/fhir/medication` (search)
+- **MedicationRequest:** `POST /api/fhir/medication-request`, `GET /api/fhir/medication-request/:id`, `PUT /api/fhir/medication-request/:id`, `DELETE /api/fhir/medication-request/:id`, `GET /api/fhir/medication-request` (search)
+- **Encounter:** `POST /api/fhir/encounter`, `GET /api/fhir/encounter/:id`, `PUT /api/fhir/encounter/:id`, `DELETE /api/fhir/encounter/:id`, `GET /api/fhir/encounter` (search)
+- **Observation:** `POST /api/fhir/observation`, `GET /api/fhir/observation/:id`, `PUT /api/fhir/observation/:id`, `DELETE /api/fhir/observation/:id`, `GET /api/fhir/observation` (search)
+- **Composition:** `POST /api/fhir/composition`, `GET /api/fhir/composition/:id`, `PUT /api/fhir/composition/:id`, `DELETE /api/fhir/composition/:id`, `GET /api/fhir/composition` (search)
+- **Metadata:** `GET /api/fhir/metadata`
 
 ### 5.3 Utilidades frontend
-- Servicio: `src/services/fhirService.ts`
+- Servicio: `src/services/fhirService.ts` - Todas las operaciones CRUD exportadas
 - Mapeadores: `src/utils/fhirMappers.ts`
-  - `buildPatientResource`, `buildConditionResources`, `buildMedicationResources`, `buildMedicationRequestResources`
+  - `buildPatientResource` - Convierte datos de paciente a recurso FHIR Patient
+  - `buildConditionResources` - Convierte diagnósticos CIE10 a recursos Condition
+  - `buildMedicationResources` - Convierte medicamentos a recursos Medication
+  - `buildMedicationRequestResources` - Convierte recetas a recursos MedicationRequest
+  - `buildEncounterResource` - Convierte atenciones clínicas a recurso Encounter
+  - `buildObservationResources` - Convierte signos vitales a recursos Observation
+  - `buildCompositionResource` - Agrupa historia clínica completa en Composition
 
 ---
 
 ## 6. Sincronización en la aplicación
 
 ### 6.1 Historia Clínica (ConsultaFormView)
-- Tras guardar:
-  - Upsert `Patient`
-  - Publicación de `Condition` (diagnóstico principal + relacionados)
+- Tras guardar, sincroniza automáticamente:
+  1. **Patient** - Upsert con datos del paciente
+  2. **Encounter** - Representa la atención clínica
+  3. **Conditions** - Diagnóstico principal + relacionados (con códigos CIE10)
+  4. **Observations** - Signos vitales y medidas antropométricas:
+     - Tensión arterial (sistólica y diastólica)
+     - Frecuencia cardíaca y respiratoria
+     - Saturación de oxígeno
+     - Temperatura
+     - Peso, talla, IMC
+     - Glucometría
+     - Escala de Glasgow
+  5. **Composition** - Agrupa toda la historia clínica en un documento estructurado
 - Estado de sincronización visible con `ResponsiveBadge` (`Sincronizando`, `FHIR actualizado`, `Error en FHIR`)
+- Manejo de errores: Si falla algún recurso, se registra el error pero no interrumpe el flujo
 
 ### 6.2 Recetario (RecetaFormView)
 - Tras guardar:
@@ -235,6 +265,15 @@ curl http://localhost:8180/fhir/metadata
   - Creación de `MedicationRequest` con `reasonCode` asociado a diagnósticos
 - UI con badges de estado (idéntico a Historia Clínica)
 - Campos enriquecidos: muestra códigos INVIMA y ATC junto a cada medicamento
+
+### 6.3 Vista de Demostración FHIR (FHIRDemoView)
+- Vista dedicada para demostrar interoperabilidad
+- Accesible desde menú lateral: "Interoperabilidad FHIR"
+- Funcionalidades:
+  - Búsqueda de recursos por diferentes criterios
+  - Visualización de resultados en lista
+  - Ver detalles completos de recursos en JSON
+  - Soporte para todos los recursos: Patient, Encounter, Condition, Observation, Composition
 
 ---
 
@@ -260,8 +299,10 @@ curl http://localhost:8180/fhir/metadata
 | `CIE10_VALUESET_URL` | Backend | ValueSet CIE10 (demo) |
 | `MEDS_VALUESET_URL` | Backend | ValueSet medicamentos (demo) |
 | `TERMINOLOGY_PAGE_SIZE` | Backend | Límite de resultados (default 20) |
-| `FHIR_BASE_URL` | Backend | URL HAPI FHIR (`http://localhost:8080/hapi-fhir-jpaserver/fhir`) |
-| `FHIR_USERNAME`, `FHIR_PASSWORD` | Backend | Credenciales Basic Auth (opcional) |
+| `FHIR_BASE_URL` | Backend | URL HAPI FHIR (por defecto `https://hapi.fhir.org/baseR4` - servidor público) |
+| `FHIR_USERNAME`, `FHIR_PASSWORD` | Backend | Credenciales Basic Auth (opcional, no requerido para HAPI público) |
+
+**Nota importante:** El sistema está configurado para usar HAPI FHIR público por defecto (`https://hapi.fhir.org/baseR4`), que es gratuito y no requiere credenciales. Ideal para estudiantes y demostraciones.
 
 ---
 

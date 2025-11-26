@@ -94,6 +94,18 @@ export async function createMedicationRequest(resource: any): Promise<FhirRespon
   return post<FhirResponse>('/fhir/medication-request', { resource });
 }
 
+export async function createEncounter(resource: any): Promise<FhirResponse> {
+  return post<FhirResponse>('/fhir/encounter', { resource });
+}
+
+export async function createObservation(resource: any): Promise<FhirResponse> {
+  return post<FhirResponse>('/fhir/observation', { resource });
+}
+
+export async function createComposition(resource: any): Promise<FhirResponse> {
+  return post<FhirResponse>('/fhir/composition', { resource });
+}
+
 // ==================== READ OPERATIONS ====================
 
 export async function getPatient(id: string): Promise<FhirResponse> {
@@ -110,6 +122,18 @@ export async function getMedication(id: string): Promise<FhirResponse> {
 
 export async function getMedicationRequest(id: string): Promise<FhirResponse> {
   return get<FhirResponse>(`/fhir/medication-request/${id}`);
+}
+
+export async function getEncounter(id: string): Promise<FhirResponse> {
+  return get<FhirResponse>(`/fhir/encounter/${id}`);
+}
+
+export async function getObservation(id: string): Promise<FhirResponse> {
+  return get<FhirResponse>(`/fhir/observation/${id}`);
+}
+
+export async function getComposition(id: string): Promise<FhirResponse> {
+  return get<FhirResponse>(`/fhir/composition/${id}`);
 }
 
 // ==================== UPDATE OPERATIONS ====================
@@ -130,6 +154,18 @@ export async function updateMedicationRequest(id: string, resource: any): Promis
   return put<FhirResponse>(`/fhir/medication-request/${id}`, { resource });
 }
 
+export async function updateEncounter(id: string, resource: any): Promise<FhirResponse> {
+  return put<FhirResponse>(`/fhir/encounter/${id}`, { resource });
+}
+
+export async function updateObservation(id: string, resource: any): Promise<FhirResponse> {
+  return put<FhirResponse>(`/fhir/observation/${id}`, { resource });
+}
+
+export async function updateComposition(id: string, resource: any): Promise<FhirResponse> {
+  return put<FhirResponse>(`/fhir/composition/${id}`, { resource });
+}
+
 // ==================== DELETE OPERATIONS ====================
 
 export async function deletePatient(id: string): Promise<{ success: boolean; message: string }> {
@@ -146,6 +182,18 @@ export async function deleteMedication(id: string): Promise<{ success: boolean; 
 
 export async function deleteMedicationRequest(id: string): Promise<{ success: boolean; message: string }> {
   return del<{ success: boolean; message: string }>(`/fhir/medication-request/${id}`);
+}
+
+export async function deleteEncounter(id: string): Promise<{ success: boolean; message: string }> {
+  return del<{ success: boolean; message: string }>(`/fhir/encounter/${id}`);
+}
+
+export async function deleteObservation(id: string): Promise<{ success: boolean; message: string }> {
+  return del<{ success: boolean; message: string }>(`/fhir/observation/${id}`);
+}
+
+export async function deleteComposition(id: string): Promise<{ success: boolean; message: string }> {
+  return del<{ success: boolean; message: string }>(`/fhir/composition/${id}`);
 }
 
 // ==================== SEARCH OPERATIONS ====================
@@ -176,6 +224,27 @@ export async function searchMedicationRequests(params: Record<string, string>): 
     .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
     .join('&');
   return get<FhirBundleResponse>(`/fhir/medication-request?${queryString}`);
+}
+
+export async function searchEncounters(params: Record<string, string>): Promise<FhirBundleResponse> {
+  const queryString = Object.entries(params)
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join('&');
+  return get<FhirBundleResponse>(`/fhir/encounter?${queryString}`);
+}
+
+export async function searchObservations(params: Record<string, string>): Promise<FhirBundleResponse> {
+  const queryString = Object.entries(params)
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join('&');
+  return get<FhirBundleResponse>(`/fhir/observation?${queryString}`);
+}
+
+export async function searchCompositions(params: Record<string, string>): Promise<FhirBundleResponse> {
+  const queryString = Object.entries(params)
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join('&');
+  return get<FhirBundleResponse>(`/fhir/composition?${queryString}`);
 }
 
 // ==================== METADATA ====================

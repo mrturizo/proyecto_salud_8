@@ -3600,6 +3600,222 @@ app.get('/api/fhir/medication-request', async (req, res) => {
   }
 });
 
+// ==================== FHIR ENCOUNTER OPERATIONS ====================
+
+app.post('/api/fhir/encounter', async (req, res) => {
+  const { resource } = req.body || {};
+  if (!resource) {
+    return res.status(400).json({ error: 'Falta el recurso Encounter' });
+  }
+  try {
+    const response = await fhirClient.createEncounter(resource);
+    res.json({ success: true, resource: response });
+  } catch (error) {
+    console.error('❌ [FHIR] Error creando Encounter:', error);
+    res.status(500).json({ error: 'Error enviando Encounter a FHIR', details: error.message });
+  }
+});
+
+app.get('/api/fhir/encounter/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const response = await fhirClient.readEncounter(id);
+    res.json({ success: true, resource: response });
+  } catch (error) {
+    console.error('❌ [FHIR] Error leyendo Encounter:', error);
+    if (error.message.includes('404')) {
+      res.status(404).json({ error: 'Encounter no encontrado', details: error.message });
+    } else {
+      res.status(500).json({ error: 'Error leyendo Encounter desde FHIR', details: error.message });
+    }
+  }
+});
+
+app.put('/api/fhir/encounter/:id', async (req, res) => {
+  const { resource } = req.body || {};
+  if (!resource) {
+    return res.status(400).json({ error: 'Falta el recurso Encounter' });
+  }
+  try {
+    const { id } = req.params;
+    const response = await fhirClient.updateEncounter(id, resource);
+    res.json({ success: true, resource: response });
+  } catch (error) {
+    console.error('❌ [FHIR] Error actualizando Encounter:', error);
+    res.status(500).json({ error: 'Error actualizando Encounter en FHIR', details: error.message });
+  }
+});
+
+app.delete('/api/fhir/encounter/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await fhirClient.deleteEncounter(id);
+    res.json({ success: true, message: 'Encounter eliminado correctamente' });
+  } catch (error) {
+    console.error('❌ [FHIR] Error eliminando Encounter:', error);
+    if (error.message.includes('404')) {
+      res.status(404).json({ error: 'Encounter no encontrado', details: error.message });
+    } else {
+      res.status(500).json({ error: 'Error eliminando Encounter desde FHIR', details: error.message });
+    }
+  }
+});
+
+app.get('/api/fhir/encounter', async (req, res) => {
+  try {
+    const queryParams = req.query;
+    const response = await fhirClient.searchEncounters(queryParams);
+    res.json({ success: true, bundle: response });
+  } catch (error) {
+    console.error('❌ [FHIR] Error buscando Encounters:', error);
+    res.status(500).json({ error: 'Error buscando Encounters en FHIR', details: error.message });
+  }
+});
+
+// ==================== FHIR OBSERVATION OPERATIONS ====================
+
+app.post('/api/fhir/observation', async (req, res) => {
+  const { resource } = req.body || {};
+  if (!resource) {
+    return res.status(400).json({ error: 'Falta el recurso Observation' });
+  }
+  try {
+    const response = await fhirClient.createObservation(resource);
+    res.json({ success: true, resource: response });
+  } catch (error) {
+    console.error('❌ [FHIR] Error creando Observation:', error);
+    res.status(500).json({ error: 'Error enviando Observation a FHIR', details: error.message });
+  }
+});
+
+app.get('/api/fhir/observation/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const response = await fhirClient.readObservation(id);
+    res.json({ success: true, resource: response });
+  } catch (error) {
+    console.error('❌ [FHIR] Error leyendo Observation:', error);
+    if (error.message.includes('404')) {
+      res.status(404).json({ error: 'Observation no encontrado', details: error.message });
+    } else {
+      res.status(500).json({ error: 'Error leyendo Observation desde FHIR', details: error.message });
+    }
+  }
+});
+
+app.put('/api/fhir/observation/:id', async (req, res) => {
+  const { resource } = req.body || {};
+  if (!resource) {
+    return res.status(400).json({ error: 'Falta el recurso Observation' });
+  }
+  try {
+    const { id } = req.params;
+    const response = await fhirClient.updateObservation(id, resource);
+    res.json({ success: true, resource: response });
+  } catch (error) {
+    console.error('❌ [FHIR] Error actualizando Observation:', error);
+    res.status(500).json({ error: 'Error actualizando Observation en FHIR', details: error.message });
+  }
+});
+
+app.delete('/api/fhir/observation/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await fhirClient.deleteObservation(id);
+    res.json({ success: true, message: 'Observation eliminado correctamente' });
+  } catch (error) {
+    console.error('❌ [FHIR] Error eliminando Observation:', error);
+    if (error.message.includes('404')) {
+      res.status(404).json({ error: 'Observation no encontrado', details: error.message });
+    } else {
+      res.status(500).json({ error: 'Error eliminando Observation desde FHIR', details: error.message });
+    }
+  }
+});
+
+app.get('/api/fhir/observation', async (req, res) => {
+  try {
+    const queryParams = req.query;
+    const response = await fhirClient.searchObservations(queryParams);
+    res.json({ success: true, bundle: response });
+  } catch (error) {
+    console.error('❌ [FHIR] Error buscando Observations:', error);
+    res.status(500).json({ error: 'Error buscando Observations en FHIR', details: error.message });
+  }
+});
+
+// ==================== FHIR COMPOSITION OPERATIONS ====================
+
+app.post('/api/fhir/composition', async (req, res) => {
+  const { resource } = req.body || {};
+  if (!resource) {
+    return res.status(400).json({ error: 'Falta el recurso Composition' });
+  }
+  try {
+    const response = await fhirClient.createComposition(resource);
+    res.json({ success: true, resource: response });
+  } catch (error) {
+    console.error('❌ [FHIR] Error creando Composition:', error);
+    res.status(500).json({ error: 'Error enviando Composition a FHIR', details: error.message });
+  }
+});
+
+app.get('/api/fhir/composition/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const response = await fhirClient.readComposition(id);
+    res.json({ success: true, resource: response });
+  } catch (error) {
+    console.error('❌ [FHIR] Error leyendo Composition:', error);
+    if (error.message.includes('404')) {
+      res.status(404).json({ error: 'Composition no encontrado', details: error.message });
+    } else {
+      res.status(500).json({ error: 'Error leyendo Composition desde FHIR', details: error.message });
+    }
+  }
+});
+
+app.put('/api/fhir/composition/:id', async (req, res) => {
+  const { resource } = req.body || {};
+  if (!resource) {
+    return res.status(400).json({ error: 'Falta el recurso Composition' });
+  }
+  try {
+    const { id } = req.params;
+    const response = await fhirClient.updateComposition(id, resource);
+    res.json({ success: true, resource: response });
+  } catch (error) {
+    console.error('❌ [FHIR] Error actualizando Composition:', error);
+    res.status(500).json({ error: 'Error actualizando Composition en FHIR', details: error.message });
+  }
+});
+
+app.delete('/api/fhir/composition/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await fhirClient.deleteComposition(id);
+    res.json({ success: true, message: 'Composition eliminado correctamente' });
+  } catch (error) {
+    console.error('❌ [FHIR] Error eliminando Composition:', error);
+    if (error.message.includes('404')) {
+      res.status(404).json({ error: 'Composition no encontrado', details: error.message });
+    } else {
+      res.status(500).json({ error: 'Error eliminando Composition desde FHIR', details: error.message });
+    }
+  }
+});
+
+app.get('/api/fhir/composition', async (req, res) => {
+  try {
+    const queryParams = req.query;
+    const response = await fhirClient.searchCompositions(queryParams);
+    res.json({ success: true, bundle: response });
+  } catch (error) {
+    console.error('❌ [FHIR] Error buscando Compositions:', error);
+    res.status(500).json({ error: 'Error buscando Compositions en FHIR', details: error.message });
+  }
+});
+
 // ==================== FHIR METADATA ====================
 
 app.get('/api/fhir/metadata', async (req, res) => {
