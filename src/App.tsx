@@ -2168,11 +2168,11 @@ function ConsultaFormView({ patient, deviceType }: any) {
     });
   };
 
-  const handleGuardar = async () => {
+  const handleGuardar = async (): Promise<number | null> => {
     console.log('[ConsultaFormView] handleGuardar llamado');
     if (!motivo.trim() || !diagnosticoPrincipal.trim()) {
       alert('Por favor completa los campos obligatorios: Motivo de consulta y Diagnóstico principal');
-      return;
+      return null;
     }
 
     try {
@@ -2232,6 +2232,8 @@ function ConsultaFormView({ patient, deviceType }: any) {
       if (atencionId) {
         await AuthService.updateHCMedicina(atencionId, payload);
         alert('Historia clínica actualizada exitosamente');
+        setUltimaAtencionId(atencionId);
+        nuevaAtencionId = atencionId;
       } else {
         if (!user?.id || !patient?.id) {
           throw new Error('Usuario o paciente no disponible');
@@ -2248,11 +2250,6 @@ function ConsultaFormView({ patient, deviceType }: any) {
         setAtencionId(resultado.atencion_id);
         setUltimaAtencionId(resultado.atencion_id);
         alert('Nueva atención creada exitosamente');
-      }
-      
-      // Actualizar también cuando se actualiza
-      if (atencionId) {
-        setUltimaAtencionId(atencionId);
       }
 
       // Sincronización HL7 FHIR
@@ -2475,9 +2472,13 @@ function ConsultaFormView({ patient, deviceType }: any) {
           }, 10000);
         }
       }
+      
+      // Retornar el ID de atención al finalizar
+      return nuevaAtencionId;
     } catch (e: any) {
       console.error('Error guardando:', e);
       alert(`Error: ${e.message || 'Error guardando historia clínica'}`);
+      return null;
     } finally {
       setGuardando(false);
     }
@@ -2989,19 +2990,13 @@ function ConsultaFormView({ patient, deviceType }: any) {
             onClick={async () => {
               try {
                 setGuardando(true);
-                // Primero guardar/actualizar la atención
-                await handleGuardar();
+                // Primero guardar/actualizar la atención y obtener el ID directamente
+                const atencionIdGuardada = await handleGuardar();
                 
-                // Esperar un momento para que el estado se actualice
-                await new Promise(resolve => setTimeout(resolve, 200));
-                
-                // Obtener el ID de atención actual (puede ser el que ya existía o el nuevo)
-                const currentAtencionId = ultimaAtencionId || atencionId;
-                
-                // Marcar atención como completada
-                if (currentAtencionId) {
+                // Marcar atención como completada usando el ID retornado
+                if (atencionIdGuardada) {
                   try {
-                    await AuthService.completarAtencion(currentAtencionId);
+                    await AuthService.completarAtencion(atencionIdGuardada);
                     alert('Consulta finalizada exitosamente');
                   } catch (e: any) {
                     console.error('Error completando atención:', e);
