@@ -1222,6 +1222,8 @@ app.put('/api/hc/psicologia/:atencion_id', (req, res) => {
 app.put('/api/atenciones/:id/completar', (req, res) => {
   const { id } = req.params;
   
+  console.log('[Completar Atención] Recibida petición para atencion_id:', id);
+  
   const query = `
     UPDATE Atenciones_Clinicas 
     SET estado = 'Completada'
@@ -1230,12 +1232,15 @@ app.put('/api/atenciones/:id/completar', (req, res) => {
   
   db.run(query, [id], function(err) {
     if (err) {
-      console.error('Error completando atención:', err);
+      console.error('[Completar Atención] Error completando atención:', err);
       return res.status(500).json({ error: 'Error completando atención' });
     }
+    console.log('[Completar Atención] Filas actualizadas:', this.changes);
     if (this.changes === 0) {
+      console.warn('[Completar Atención] No se encontró atención con ID:', id);
       return res.status(404).json({ error: 'Atención no encontrada' });
     }
+    console.log('[Completar Atención] Atención marcada como completada exitosamente');
     res.json({ 
       success: true, 
       message: 'Atención marcada como completada' 
@@ -1274,6 +1279,8 @@ app.get('/api/usuarios/:id/hc-completadas', (req, res) => {
   const { id } = req.params;
   const { desde, hasta } = req.query;
   
+  console.log('[HC Completadas] Buscando consultas para usuario_id:', id, 'desde:', desde, 'hasta:', hasta);
+  
   let query = `
     SELECT 
       hc.atencion_id,
@@ -1282,6 +1289,7 @@ app.get('/api/usuarios/:id/hc-completadas', (req, res) => {
       hc.plan_manejo,
       ac.fecha_atencion,
       ac.estado,
+      ac.usuario_id,
       p.paciente_id,
       p.primer_nombre,
       p.segundo_nombre,
@@ -1313,8 +1321,18 @@ app.get('/api/usuarios/:id/hc-completadas', (req, res) => {
   
   db.all(query, params, (err, rows) => {
     if (err) {
-      console.error('Error obteniendo HC completadas:', err);
+      console.error('[HC Completadas] Error obteniendo HC completadas:', err);
       return res.status(500).json({ error: 'Error del servidor' });
+    }
+    console.log('[HC Completadas] Encontradas', rows.length, 'consultas completadas para usuario_id:', id);
+    if (rows.length > 0) {
+      console.log('[HC Completadas] Primeras 3 consultas:', rows.slice(0, 3).map(r => ({ 
+        atencion_id: r.atencion_id, 
+        paciente: `${r.primer_nombre} ${r.primer_apellido}`, 
+        fecha: r.fecha_atencion,
+        estado: r.estado,
+        usuario_id: r.usuario_id
+      })));
     }
     res.json(rows);
   });
