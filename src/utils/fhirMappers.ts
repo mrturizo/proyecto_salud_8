@@ -21,9 +21,17 @@ interface MedicationInput {
 }
 
 export function sanitizeId(value: string | number): string {
-  return String(value || '')
+  let sanitized = String(value || '')
     .trim()
     .replace(/[^A-Za-z0-9\-]/g, '');
+  
+  // HAPI FHIR requiere que los IDs asignados por el cliente tengan al menos un carácter no numérico
+  // Si el ID es puramente numérico, agregamos un prefijo
+  if (/^\d+$/.test(sanitized)) {
+    sanitized = `id-${sanitized}`;
+  }
+  
+  return sanitized;
 }
 
 function splitName(fullName?: string) {
