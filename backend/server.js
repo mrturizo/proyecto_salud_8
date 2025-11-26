@@ -2183,8 +2183,8 @@ app.post('/api/demandas-inducidas', (req, res) => {
       remision_a, estado, asignado_a_uid, solicitado_por_uid, seguimiento,
       edad, sexo, eps, regimen, ips_atencion, ebs_numero, educacion_salud, intervencion_efectiva,
       tipo_identificacion, numero_identificacion, telefono, direccion, nombres_completos,
-      intervencion_efectiva_si, seguimiento_verificado, seguimiento_medio
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      intervencion_efectiva_si, seguimiento_verificado, seguimiento_medio, fecha_creacion_timestamp
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
   
   const params = [
@@ -2213,7 +2213,8 @@ app.post('/api/demandas-inducidas', (req, res) => {
     nombres_completos || null,
     intervencion_efectiva_si !== undefined ? (intervencion_efectiva_si ? 1 : 0) : null,
     seguimiento_verificado !== undefined ? (seguimiento_verificado ? 1 : 0) : null,
-    seguimiento_medio || null
+    seguimiento_medio || null,
+    new Date().toISOString() // fecha_creacion_timestamp
   ];
   
   db.run(insert, params, function(err) {

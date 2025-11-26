@@ -2168,6 +2168,7 @@ function ConsultaFormView({ patient, deviceType }: any) {
   };
 
   const handleGuardar = async () => {
+    console.log('[ConsultaFormView] handleGuardar llamado');
     if (!motivo.trim() || !diagnosticoPrincipal.trim()) {
       alert('Por favor completa los campos obligatorios: Motivo de consulta y Diagnóstico principal');
       return;
@@ -2249,6 +2250,11 @@ function ConsultaFormView({ patient, deviceType }: any) {
 
       // Sincronización HL7 FHIR
       if (patient) {
+        console.log('[FHIR Sync] Iniciando sincronización...', { 
+          patientId: patient.id, 
+          pacienteNombre: patient.nombre,
+          atencionId: nuevaAtencionId 
+        });
         setFhirSyncStatus('syncing');
         try {
           const failedFhirItems: Array<{ type: string; detail: string }> = [];
@@ -2280,12 +2286,15 @@ function ConsultaFormView({ patient, deviceType }: any) {
           // 2. Sincronizar Patient
           const { resource: patientResource, patientId: fhirPatientId } = buildPatientResource(patient);
           const identifierValue = patient.documento || patient.numero_documento || patient.id?.toString();
+          console.log('[FHIR Sync] Sincronizando Patient...', { patientId: fhirPatientId, identifierValue });
           await syncPatient(patientResource, identifierValue);
           const patientReference = `Patient/${fhirPatientId}`;
+          console.log('[FHIR Sync] Patient sincronizado:', patientReference);
 
           // 3. Crear Encounter
           let encounterReference: string | undefined;
           if (nuevaAtencionId) {
+            console.log('[FHIR Sync] Creando Encounter...', { atencionId: nuevaAtencionId });
             const { resource: encounterResource, encounterId: fhirEncounterId } = buildEncounterResource({
               atencion: {
                 atencion_id: nuevaAtencionId,
@@ -2302,6 +2311,7 @@ function ConsultaFormView({ patient, deviceType }: any) {
             const encounterResult = await createEncounter(encounterResource);
             const createdEncounterId = encounterResult.resource?.id || fhirEncounterId;
             encounterReference = `Encounter/${createdEncounterId}`;
+            console.log('[FHIR Sync] Encounter creado:', encounterReference);
           }
 
           // 3. Crear Conditions (diagnósticos)
@@ -2323,17 +2333,21 @@ function ConsultaFormView({ patient, deviceType }: any) {
 
           const conditionReferences: string[] = [];
           if (conditionResources.length > 0) {
+            console.log('[FHIR Sync] Creando Conditions...', { cantidad: conditionResources.length });
             const conditionResults = await Promise.allSettled(
               conditionResources.map((resource) => createCondition(resource))
             );
             conditionResults.forEach((result, index) => {
               if (result.status === 'fulfilled' && result.value?.resource?.id) {
-                conditionReferences.push(`Condition/${result.value.resource.id}`);
+                const conditionRef = `Condition/${result.value.resource.id}`;
+                conditionReferences.push(conditionRef);
+                console.log('[FHIR Sync] Condition creado:', conditionRef);
               } else {
                 registerFailure('Condition', result.status === 'rejected' ? result.reason : 'Respuesta inválida');
                 console.debug('Condition payload fallido:', conditionResources[index]);
               }
             });
+            console.log('[FHIR Sync] Conditions creados:', conditionReferences.length, 'de', conditionResources.length);
           }
 
           // 4. Crear Observations (signos vitales)
@@ -2365,14 +2379,22 @@ function ConsultaFormView({ patient, deviceType }: any) {
             });
 
             if (observationResources.length > 0) {
+              console.log('[FHIR Sync] Creando Observations en lotes...', { 
+                total: observationResources.length, 
+                batchSize: OBSERVATION_BATCH_SIZE,
+                delay: OBSERVATION_BATCH_DELAY_MS 
+              });
               for (let i = 0; i < observationResources.length; i += OBSERVATION_BATCH_SIZE) {
                 const batch = observationResources.slice(i, i + OBSERVATION_BATCH_SIZE);
+                console.log(`[FHIR Sync] Procesando lote ${Math.floor(i / OBSERVATION_BATCH_SIZE) + 1} (${batch.length} Observations)...`);
                 const batchResults = await Promise.allSettled(
                   batch.map((resource) => createObservation(resource))
                 );
                 batchResults.forEach((result, idx) => {
                   if (result.status === 'fulfilled' && result.value?.resource?.id) {
-                    observationReferences.push(`Observation/${result.value.resource.id}`);
+                    const observationRef = `Observation/${result.value.resource.id}`;
+                    observationReferences.push(observationRef);
+                    console.log('[FHIR Sync] Observation creado:', observationRef);
                   } else {
                     registerFailure('Observation', result.status === 'rejected' ? result.reason : 'Respuesta inválida');
                     console.debug('Observation payload fallido:', batch[idx]);
@@ -2383,11 +2405,17 @@ function ConsultaFormView({ patient, deviceType }: any) {
                   await wait(OBSERVATION_BATCH_DELAY_MS);
                 }
               }
+              console.log('[FHIR Sync] Observations creados:', observationReferences.length, 'de', observationResources.length);
             }
           }
 
           // 5. Crear Composition (historia clínica completa)
           if (encounterReference) {
+            console.log('[FHIR Sync] Creando Composition...', {
+              encounterReference,
+              conditions: conditionReferences.length,
+              observations: observationReferences.length
+            });
             const { resource: compositionResource } = buildCompositionResource({
               encounterReference,
               patientReference,
@@ -2403,7 +2431,9 @@ function ConsultaFormView({ patient, deviceType }: any) {
               tipoDocumento: 'Historia Clínica de Medicina General',
               titulo: `Historia Clínica - ${patient.nombre || 'Paciente'}`
             });
-            await createComposition(compositionResource);
+            const compositionResult = await createComposition(compositionResource);
+            const compositionId = compositionResult.resource?.id;
+            console.log('[FHIR Sync] Composition creado:', compositionId ? `Composition/${compositionId}` : 'ID pendiente');
           }
 
           if (failedFhirItems.length > 0) {
@@ -2412,10 +2442,30 @@ function ConsultaFormView({ patient, deviceType }: any) {
               `Historia clínica sincronizada con advertencias: ${failedFhirItems.length} recursos FHIR no se enviaron. Revisa la consola para más detalles.`
             );
           }
+          
+          console.log('[FHIR Sync] Sincronización completada', {
+            patientReference,
+            encounterReference,
+            conditions: conditionReferences.length,
+            observations: observationReferences.length,
+            composition: encounterReference ? 'creado' : 'no creado',
+            failed: failedFhirItems.length
+          });
+          
           setFhirSyncStatus('success');
+          
+          // Mantener el estado 'success' visible por 5 segundos antes de resetear
+          setTimeout(() => {
+            setFhirSyncStatus('idle');
+          }, 5000);
         } catch (fhirError) {
           console.error('❌ Error sincronizando con FHIR:', fhirError);
           setFhirSyncStatus('error');
+          
+          // Mantener el error visible por 10 segundos antes de resetear
+          setTimeout(() => {
+            setFhirSyncStatus('idle');
+          }, 10000);
         }
       }
     } catch (e: any) {
