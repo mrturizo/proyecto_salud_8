@@ -1224,26 +1224,48 @@ app.put('/api/atenciones/:id/completar', (req, res) => {
   
   console.log('[Completar Atención] Recibida petición para atencion_id:', id);
   
-  const query = `
-    UPDATE Atenciones_Clinicas 
-    SET estado = 'Completada'
-    WHERE atencion_id = ?
-  `;
-  
-  db.run(query, [id], function(err) {
+  // Primero verificar que la atención existe
+  db.get('SELECT atencion_id, estado, usuario_id, paciente_id FROM Atenciones_Clinicas WHERE atencion_id = ?', [id], (err, row) => {
     if (err) {
-      console.error('[Completar Atención] Error completando atención:', err);
-      return res.status(500).json({ error: 'Error completando atención' });
+      console.error('[Completar Atención] Error verificando atención:', err);
+      return res.status(500).json({ error: 'Error verificando atención' });
     }
-    console.log('[Completar Atención] Filas actualizadas:', this.changes);
-    if (this.changes === 0) {
+    
+    if (!row) {
       console.warn('[Completar Atención] No se encontró atención con ID:', id);
       return res.status(404).json({ error: 'Atención no encontrada' });
     }
-    console.log('[Completar Atención] Atención marcada como completada exitosamente');
-    res.json({ 
-      success: true, 
-      message: 'Atención marcada como completada' 
+    
+    console.log('[Completar Atención] Atención encontrada:', { 
+      atencion_id: row.atencion_id, 
+      estado_actual: row.estado, 
+      usuario_id: row.usuario_id,
+      paciente_id: row.paciente_id 
+    });
+  
+    const query = `
+      UPDATE Atenciones_Clinicas 
+      SET estado = 'Completada'
+      WHERE atencion_id = ?
+    `;
+    
+    db.run(query, [id], function(err2) {
+      if (err2) {
+        console.error('[Completar Atención] Error completando atención:', err2);
+        return res.status(500).json({ error: 'Error completando atención' });
+      }
+      console.log('[Completar Atención] Filas actualizadas:', this.changes);
+      if (this.changes === 0) {
+        console.warn('[Completar Atención] No se pudo actualizar atención con ID:', id);
+        return res.status(404).json({ error: 'Atención no encontrada' });
+      }
+      console.log('[Completar Atención] Atención marcada como completada exitosamente');
+      res.json({ 
+        success: true, 
+        message: 'Atención marcada como completada',
+        atencion_id: id,
+        estado_anterior: row.estado
+      });
     });
   });
 });
@@ -1297,11 +1319,11 @@ app.get('/api/usuarios/:id/hc-completadas', (req, res) => {
       p.segundo_apellido,
       p.numero_documento,
       p.tipo_documento,
-      f.apellido_principal as familia_apellido
+      COALESCE(f.apellido_principal, 'Sin familia') as familia_apellido
     FROM HC_Medicina_General hc
     JOIN Atenciones_Clinicas ac ON hc.atencion_id = ac.atencion_id
     JOIN Pacientes p ON ac.paciente_id = p.paciente_id
-    JOIN Familias f ON p.familia_id = f.familia_id
+    LEFT JOIN Familias f ON p.familia_id = f.familia_id
     WHERE ac.usuario_id = ? AND ac.estado = 'Completada'
   `;
   
@@ -1319,6 +1341,9 @@ app.get('/api/usuarios/:id/hc-completadas', (req, res) => {
   
   query += ' ORDER BY ac.fecha_atencion DESC';
   
+  console.log('[HC Completadas] Ejecutando query con usuario_id:', id);
+  console.log('[HC Completadas] Parámetros:', params);
+  
   db.all(query, params, (err, rows) => {
     if (err) {
       console.error('[HC Completadas] Error obteniendo HC completadas:', err);
@@ -1331,8 +1356,24 @@ app.get('/api/usuarios/:id/hc-completadas', (req, res) => {
         paciente: `${r.primer_nombre} ${r.primer_apellido}`, 
         fecha: r.fecha_atencion,
         estado: r.estado,
-        usuario_id: r.usuario_id
+        usuario_id: r.usuario_id,
+        familia: r.familia_apellido
       })));
+    } else {
+      // Debug: verificar si hay atenciones con ese usuario_id pero estado diferente
+      db.all(
+        `SELECT atencion_id, estado, usuario_id, paciente_id 
+         FROM Atenciones_Clinicas 
+         WHERE usuario_id = ? 
+         ORDER BY atencion_id DESC 
+         LIMIT 5`,
+        [id],
+        (err2, debugRows) => {
+          if (!err2 && debugRows.length > 0) {
+            console.log('[HC Completadas] Debug - Últimas 5 atenciones para este usuario:', debugRows);
+          }
+        }
+      );
     }
     res.json(rows);
   });

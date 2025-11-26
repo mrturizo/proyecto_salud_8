@@ -3036,7 +3036,8 @@ function ConsultaFormView({ patient, deviceType }: any) {
                     alert('Consulta finalizada exitosamente');
                     
                     // Esperar un momento para asegurar que el backend haya actualizado el estado
-                    await new Promise(resolve => setTimeout(resolve, 300));
+                    console.log('[Finalizar] Esperando 1 segundo antes de disparar evento...');
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                     
                     // Disparar evento para refrescar la vista de consultas realizadas
                     console.log('[Finalizar] Disparando evento consultaFinalizada con ID:', atencionIdGuardada);
@@ -4058,8 +4059,9 @@ function ConsultasRealizadasView({ deviceType }: any) {
       console.log('[Consultas Realizadas] Consulta finalizada detectada, refrescando lista...', event.detail);
       // Esperar un momento para asegurar que el backend haya actualizado el estado
       setTimeout(() => {
+        console.log('[Consultas Realizadas] Ejecutando loadHCCompletadas después del delay...');
         loadHCCompletadas();
-      }, 500);
+      }, 1000);
     };
 
     window.addEventListener('consultaFinalizada', handleConsultaFinalizada);
