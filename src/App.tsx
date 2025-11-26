@@ -2063,30 +2063,47 @@ function ConsultaFormView({ patient, deviceType }: any) {
               try {
                 let revSistemas;
                 if (typeof hcCompleta.revision_por_sistemas === 'string') {
-                  // Verificar que no sea "[object Object]" antes de parsear
-                  if (hcCompleta.revision_por_sistemas.trim().startsWith('{') || hcCompleta.revision_por_sistemas.trim().startsWith('[')) {
-                    revSistemas = JSON.parse(hcCompleta.revision_por_sistemas);
+                  const strValue = hcCompleta.revision_por_sistemas.trim();
+                  // Detectar específicamente el string "[object Object]"
+                  if (strValue === '[object Object]' || strValue === '"object Object"') {
+                    console.warn('revision_por_sistemas contiene "[object Object]", usando valor por defecto');
+                    revSistemas = { sistemas: [], hallazgos: {} };
+                  } else if (strValue.startsWith('{') || strValue.startsWith('[')) {
+                    // Intentar parsear solo si parece JSON válido
+                    try {
+                      revSistemas = JSON.parse(strValue);
+                    } catch (parseError) {
+                      console.warn('Error parseando JSON de revision_por_sistemas:', parseError);
+                      revSistemas = { sistemas: [], hallazgos: {} };
+                    }
                   } else {
-                    // Si no es JSON válido, intentar parsearlo como objeto
+                    // Si no es JSON válido, usar valor por defecto
                     console.warn('revision_por_sistemas no es JSON válido, usando valor por defecto');
                     revSistemas = { sistemas: [], hallazgos: {} };
                   }
-                } else if (typeof hcCompleta.revision_por_sistemas === 'object') {
+                } else if (typeof hcCompleta.revision_por_sistemas === 'object' && hcCompleta.revision_por_sistemas !== null) {
                   revSistemas = hcCompleta.revision_por_sistemas;
                 } else {
                   revSistemas = { sistemas: [], hallazgos: {} };
                 }
                 
-                if (revSistemas && typeof revSistemas === 'object') {
+                if (revSistemas && typeof revSistemas === 'object' && revSistemas !== null) {
                   if (Array.isArray(revSistemas.sistemas)) {
                     setRevisionPorSistemasSeleccion(revSistemas.sistemas);
                   }
                   if (revSistemas.hallazgos && typeof revSistemas.hallazgos === 'object') {
                     setRevisionPorSistemasHallazgos(revSistemas.hallazgos);
                   }
+                } else {
+                  // Si revSistemas no es válido, usar valores por defecto
+                  setRevisionPorSistemasSeleccion([]);
+                  setRevisionPorSistemasHallazgos({});
                 }
               } catch (e) {
-                console.error('Error parseando revisión por sistemas:', e);
+                console.error('➤➤ Error parseando revisión por sistemas:', e);
+                // En caso de error, usar valores por defecto
+                setRevisionPorSistemasSeleccion([]);
+                setRevisionPorSistemasHallazgos({});
                 // En caso de error, usar valores por defecto
                 setRevisionPorSistemasSeleccion([]);
                 setRevisionPorSistemasHallazgos({});
@@ -2209,7 +2226,7 @@ function ConsultaFormView({ patient, deviceType }: any) {
         enfoque_diferencial: enfoqueDiferencial,
         antecedentes_personales: antecedentesPersonales,
         antecedentes_familiares: antecedentesFamiliares,
-        revision_por_sistemas: { sistemas: revisionPorSistemasSeleccion, hallazgos: revisionPorSistemasHallazgos },
+        revision_por_sistemas: JSON.stringify({ sistemas: revisionPorSistemasSeleccion, hallazgos: revisionPorSistemasHallazgos }),
         signos_vitales: null,
         examen_fisico: examenFisico,
         diagnosticos_cie10: diagnosticosRelacionados.filter(d => d.trim() !== '').length > 0
@@ -2472,7 +2489,7 @@ function ConsultaFormView({ patient, deviceType }: any) {
             composition: encounterReference ? 'creado' : 'no creado',
             failed: failedFhirItems.length
           });
-          
+
           setFhirSyncStatus('success');
           
           // Mantener el estado 'success' visible por 5 segundos antes de resetear
@@ -3009,7 +3026,7 @@ function ConsultaFormView({ patient, deviceType }: any) {
                 setGuardando(true);
                 // Primero guardar/actualizar la atención y obtener el ID directamente
                 const atencionIdGuardada = await handleGuardar();
-                
+              
                 // Marcar atención como completada usando el ID retornado
                 if (atencionIdGuardada) {
                   try {
@@ -3018,7 +3035,11 @@ function ConsultaFormView({ patient, deviceType }: any) {
                     console.log('[Finalizar] Atención marcada como completada exitosamente');
                     alert('Consulta finalizada exitosamente');
                     
+                    // Esperar un momento para asegurar que el backend haya actualizado el estado
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    
                     // Disparar evento para refrescar la vista de consultas realizadas
+                    console.log('[Finalizar] Disparando evento consultaFinalizada con ID:', atencionIdGuardada);
                     window.dispatchEvent(new CustomEvent('consultaFinalizada', { 
                       detail: { atencionId: atencionIdGuardada } 
                     }));
@@ -4033,29 +4054,19 @@ function ConsultasRealizadasView({ deviceType }: any) {
 
   // Escuchar evento de consulta finalizada para refrescar la lista
   useEffect(() => {
-    const handleConsultaFinalizada = () => {
-      console.log('[Consultas Realizadas] Consulta finalizada detectada, refrescando lista...');
-      loadHCCompletadas();
+    const handleConsultaFinalizada = (event: any) => {
+      console.log('[Consultas Realizadas] Consulta finalizada detectada, refrescando lista...', event.detail);
+      // Esperar un momento para asegurar que el backend haya actualizado el estado
+      setTimeout(() => {
+        loadHCCompletadas();
+      }, 500);
     };
 
     window.addEventListener('consultaFinalizada', handleConsultaFinalizada);
     return () => {
       window.removeEventListener('consultaFinalizada', handleConsultaFinalizada);
     };
-  }, []);
-
-  // Escuchar evento de consulta finalizada para refrescar la lista
-  useEffect(() => {
-    const handleConsultaFinalizada = () => {
-      console.log('[Consultas Realizadas] Consulta finalizada detectada, refrescando lista...');
-      loadHCCompletadas();
-    };
-
-    window.addEventListener('consultaFinalizada', handleConsultaFinalizada);
-    return () => {
-      window.removeEventListener('consultaFinalizada', handleConsultaFinalizada);
-    };
-  }, []);
+  }, [isPsicologo, filtroDesde, filtroHasta]); // Agregar dependencias para que loadHCCompletadas tenga acceso
 
   const getNombreCompleto = (hc: any) => {
     if (isPsicologo) {

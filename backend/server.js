@@ -2971,7 +2971,7 @@ app.post('/api/stt', upload.single('audio'), async (req, res) => {
         filename: req.file.originalname
       });
     } finally {
-      fs.unlink(inputFilePath, () => {});
+    fs.unlink(inputFilePath, () => {});
     }
 
     console.log('[STT] Transcripción exitosa con proveedor', provider);
