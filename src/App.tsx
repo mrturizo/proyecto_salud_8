@@ -5,8 +5,8 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { UserProfile } from "./components/UserProfile";
 import { STTButton } from "./components/STTButton";
 import { TerminologyAutocomplete } from "./components/TerminologyAutocomplete";
-import { syncPatient, createCondition, createMedicationRequest, createMedication, createEncounter, createObservation, createComposition } from "./services/fhirService";
-import { buildPatientResource, buildConditionResources, buildMedicationRequestResources, buildMedicationResources, buildEncounterResource, buildObservationResources, buildCompositionResource } from "./utils/fhirMappers";
+import { syncPatient, createCondition, createMedicationRequest, createMedication, createEncounter, createObservation, createComposition, createPractitioner, searchPractitioners } from "./services/fhirService";
+import { buildPatientResource, buildConditionResources, buildMedicationRequestResources, buildMedicationResources, buildEncounterResource, buildObservationResources, buildCompositionResource, buildPractitionerResource } from "./utils/fhirMappers";
 import { ConsultarADRESButton } from "./components/ConsultarADRESButton";
 import { API_BASE_URL, ENABLE_TTS } from "./config/api";
 import { AntecedentesFamiliares } from "./components/AntecedentesFamiliares";
@@ -1715,6 +1715,44 @@ function HistoriaClinicaView({ patient, onBack, deviceType }: any) {
   );
 }
 
+// Helper function para obtener o crear Practitioner en FHIR
+async function getOrCreatePractitioner(user: any): Promise<string> {
+  if (!user?.id) {
+    throw new Error('Usuario no tiene ID');
+  }
+
+  const userId = user.id.toString();
+  
+  try {
+    // Buscar Practitioner por identifier (ID del usuario)
+    const searchResult = await searchPractitioners({ identifier: userId });
+    const entries = searchResult.bundle?.entry || [];
+    
+    if (entries.length > 0 && entries[0].resource) {
+      // Practitioner existe, retornar su ID de FHIR
+      return entries[0].resource.id;
+    }
+  } catch (error) {
+    console.warn('⚠️ Error buscando Practitioner, se creará uno nuevo:', error);
+  }
+
+  // Practitioner no existe, crearlo
+  try {
+    const { resource: practitionerResource, practitionerId } = buildPractitionerResource({
+      id: userId,
+      name: user?.name || (user as any)?.nombre || 'Practitioner',
+      email: (user as any)?.email,
+      identifier: userId
+    });
+    
+    const result = await createPractitioner(practitionerResource);
+    return result.resource?.id || practitionerId;
+  } catch (error) {
+    console.error('❌ Error creando Practitioner:', error);
+    throw error;
+  }
+}
+
 function ConsultaFormView({ patient, deviceType }: any) {
   const [atencionId, setAtencionId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -2208,18 +2246,26 @@ function ConsultaFormView({ patient, deviceType }: any) {
       if (patient) {
         setFhirSyncStatus('syncing');
         try {
-          const practitioner = {
-            id: user?.id,
-            name: user?.name || (user as any)?.nombre
-          };
+          // 1. Obtener o crear Practitioner en FHIR
+          let practitionerReference: string | undefined;
+          let practitionerName: string | undefined;
+          try {
+            if (user?.id) {
+              practitionerReference = await getOrCreatePractitioner(user);
+              practitionerName = user?.name || (user as any)?.nombre;
+            }
+          } catch (practitionerError) {
+            console.warn('⚠️ No se pudo crear/obtener Practitioner, continuando sin referencia:', practitionerError);
+            practitionerName = user?.name || (user as any)?.nombre;
+          }
 
-          // 1. Sincronizar Patient
+          // 2. Sincronizar Patient
           const { resource: patientResource, patientId: fhirPatientId } = buildPatientResource(patient);
           const identifierValue = patient.documento || patient.numero_documento || patient.id?.toString();
           await syncPatient(patientResource, identifierValue);
           const patientReference = `Patient/${fhirPatientId}`;
 
-          // 2. Crear Encounter
+          // 3. Crear Encounter
           let encounterReference: string | undefined;
           if (nuevaAtencionId) {
             const { resource: encounterResource, encounterId: fhirEncounterId } = buildEncounterResource({
@@ -2232,7 +2278,8 @@ function ConsultaFormView({ patient, deviceType }: any) {
                 estado: 'Completada'
               },
               patientReference,
-              practitioner
+              practitionerReference,
+              practitionerName
             });
             const encounterResult = await createEncounter(encounterResource);
             encounterReference = `Encounter/${fhirEncounterId}`;
@@ -2247,7 +2294,12 @@ function ConsultaFormView({ patient, deviceType }: any) {
             diagnosticos: diagnosticosTotales,
             patientReference,
             encounterId: nuevaAtencionId || undefined,
-            practitioner
+            practitioner: practitionerReference ? {
+              id: practitionerReference,
+              name: practitionerName
+            } : practitionerName ? {
+              name: practitionerName
+            } : undefined
           });
 
           const conditionReferences: string[] = [];
@@ -2281,7 +2333,12 @@ function ConsultaFormView({ patient, deviceType }: any) {
               },
               patientReference,
               encounterReference,
-              practitioner,
+              practitioner: practitionerReference ? {
+                id: practitionerReference,
+                name: practitionerName
+              } : practitionerName ? {
+                name: practitionerName
+              } : undefined,
               fechaObservacion: new Date().toISOString()
             });
 
@@ -2304,7 +2361,12 @@ function ConsultaFormView({ patient, deviceType }: any) {
               patientReference,
               conditionReferences,
               observationReferences,
-              practitioner,
+              practitioner: practitionerReference ? {
+                id: practitionerReference,
+                name: practitionerName
+              } : practitionerName ? {
+                name: practitionerName
+              } : undefined,
               fechaComposicion: new Date().toISOString(),
               tipoDocumento: 'Historia Clínica de Medicina General',
               titulo: `Historia Clínica - ${patient.nombre || 'Paciente'}`
@@ -3043,6 +3105,19 @@ function RecetaFormView({ patient, deviceType }: any) {
       if (patient) {
         setFhirSyncStatus('syncing');
         try {
+          // Obtener o crear Practitioner en FHIR
+          let practitionerReference: string | undefined;
+          let practitionerName: string | undefined;
+          try {
+            if (user?.id) {
+              practitionerReference = await getOrCreatePractitioner(user);
+              practitionerName = user?.name || (user as any)?.nombre;
+            }
+          } catch (practitionerError) {
+            console.warn('⚠️ No se pudo crear/obtener Practitioner, continuando sin referencia:', practitionerError);
+            practitionerName = user?.name || (user as any)?.nombre;
+          }
+
           const { resource: patientResource, patientId: fhirPatientId } = buildPatientResource(patient);
           const identifierValue = patient.documento || patient.numero_documento || patient.id?.toString();
           await syncPatient(patientResource, identifierValue);
@@ -3062,10 +3137,12 @@ function RecetaFormView({ patient, deviceType }: any) {
           const medicationRequests = buildMedicationRequestResources({
             medicamentos,
             patientReference,
-            practitioner: {
-              id: user?.id,
-              name: user?.name || (user as any)?.nombre
-            },
+            practitioner: practitionerReference ? {
+              id: practitionerReference,
+              name: practitionerName
+            } : practitionerName ? {
+              name: practitionerName
+            } : undefined,
             encounterId: atencionId,
             diagnosticos: diagnosticosTotales
           });

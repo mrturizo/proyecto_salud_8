@@ -34,6 +34,54 @@ export function sanitizeId(value: string | number): string {
   return sanitized;
 }
 
+export function buildPractitionerResource(practitioner: {
+  id: number | string;
+  name: string;
+  email?: string;
+  identifier?: string;
+}) {
+  const practitionerId = sanitizeId(practitioner.id.toString());
+  const identifierValue = practitioner.identifier || practitioner.id.toString();
+  
+  // Dividir nombre en family y given
+  const nameParts = practitioner.name.trim().split(/\s+/);
+  const family = nameParts.length > 0 ? nameParts[nameParts.length - 1] : 'Desconocido';
+  const given = nameParts.length > 1 ? nameParts.slice(0, -1) : [];
+
+  const resource: any = {
+    resourceType: 'Practitioner',
+    id: practitionerId,
+    identifier: [
+      {
+        use: 'official',
+        system: 'https://www.minsalud.gov.co/practitioner',
+        value: identifierValue
+      }
+    ],
+    name: [
+      {
+        use: 'official',
+        text: practitioner.name,
+        family,
+        given
+      }
+    ],
+    active: true
+  };
+
+  if (practitioner.email) {
+    resource.telecom = [
+      {
+        system: 'email',
+        value: practitioner.email,
+        use: 'work'
+      }
+    ];
+  }
+
+  return { resource, practitionerId };
+}
+
 function splitName(fullName?: string) {
   if (!fullName) {
     return {
@@ -368,13 +416,15 @@ interface EncounterInput {
     observaciones?: string;
   };
   patientReference: string;
-  practitioner?: PractitionerInfo;
+  practitionerReference?: string;
+  practitionerName?: string;
 }
 
 export function buildEncounterResource({
   atencion,
   patientReference,
-  practitioner
+  practitionerReference,
+  practitionerName
 }: EncounterInput) {
   const encounterId = sanitizeId(atencion.atencion_id.toString());
   const periodStart = atencion.fecha_atencion || new Date().toISOString().split('T')[0];
@@ -410,7 +460,7 @@ export function buildEncounterResource({
     }
   };
 
-  if (practitioner?.id || practitioner?.name) {
+  if (practitionerReference) {
     resource.participant = [
       {
         type: [
@@ -424,14 +474,30 @@ export function buildEncounterResource({
             ]
           }
         ],
-        individual: practitioner.id
-          ? {
-              reference: `Practitioner/${practitioner.id}`,
-              display: practitioner.name
-            }
-          : {
-              display: practitioner.name
-            }
+        individual: {
+          reference: `Practitioner/${practitionerReference}`,
+          display: practitionerName
+        }
+      }
+    ];
+  } else if (practitionerName) {
+    // Si no hay referencia pero hay nombre, usar solo display (sin referencia)
+    resource.participant = [
+      {
+        type: [
+          {
+            coding: [
+              {
+                system: 'http://terminology.hl7.org/CodeSystem/v3-ParticipationType',
+                code: 'ATND',
+                display: 'attending'
+              }
+            ]
+          }
+        ],
+        individual: {
+          display: practitionerName
+        }
       }
     ];
   }

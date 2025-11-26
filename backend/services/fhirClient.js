@@ -159,6 +159,13 @@ async function createComposition(compositionResource) {
   return fhirRequest('POST', 'Composition', compositionResource);
 }
 
+async function createPractitioner(practitionerResource) {
+  if (!practitionerResource || practitionerResource.resourceType !== 'Practitioner') {
+    throw new Error('Invalid Practitioner resource');
+  }
+  return fhirRequest('POST', 'Practitioner', practitionerResource);
+}
+
 // ==================== READ OPERATIONS ====================
 
 async function readResource(resourceType, resourceId) {
@@ -194,6 +201,10 @@ async function readObservation(observationId) {
 
 async function readComposition(compositionId) {
   return readResource('Composition', compositionId);
+}
+
+async function readPractitioner(practitionerId) {
+  return readResource('Practitioner', practitionerId);
 }
 
 // ==================== UPDATE OPERATIONS ====================
@@ -257,6 +268,13 @@ async function updateComposition(compositionId, compositionResource) {
   return updateResource('Composition', compositionId, compositionResource);
 }
 
+async function updatePractitioner(practitionerId, practitionerResource) {
+  if (!practitionerResource || practitionerResource.resourceType !== 'Practitioner') {
+    throw new Error('Invalid Practitioner resource');
+  }
+  return updateResource('Practitioner', practitionerId, practitionerResource);
+}
+
 // ==================== DELETE OPERATIONS ====================
 
 async function deleteResource(resourceType, resourceId) {
@@ -292,6 +310,10 @@ async function deleteObservation(observationId) {
 
 async function deleteComposition(compositionId) {
   return deleteResource('Composition', compositionId);
+}
+
+async function deletePractitioner(practitionerId) {
+  return deleteResource('Practitioner', practitionerId);
 }
 
 // ==================== SEARCH OPERATIONS ====================
@@ -339,6 +361,10 @@ async function searchCompositions(queryParams) {
   return searchResources('Composition', queryParams);
 }
 
+async function searchPractitioners(queryParams) {
+  return searchResources('Practitioner', queryParams);
+}
+
 // ==================== CAPABILITY STATEMENT ====================
 
 async function getCapabilityStatement() {
@@ -354,6 +380,7 @@ module.exports = {
   createEncounter,
   createObservation,
   createComposition,
+  createPractitioner,
   // READ operations
   readResource,
   readPatient,
@@ -363,6 +390,7 @@ module.exports = {
   readEncounter,
   readObservation,
   readComposition,
+  readPractitioner,
   // UPDATE operations
   updateResource,
   updatePatient,
@@ -372,6 +400,7 @@ module.exports = {
   updateEncounter,
   updateObservation,
   updateComposition,
+  updatePractitioner,
   // DELETE operations
   deleteResource,
   deletePatient,
@@ -381,6 +410,7 @@ module.exports = {
   deleteEncounter,
   deleteObservation,
   deleteComposition,
+  deletePractitioner,
   // SEARCH operations
   searchResources,
   searchPatients,
@@ -390,6 +420,7 @@ module.exports = {
   searchEncounters,
   searchObservations,
   searchCompositions,
+  searchPractitioners,
   // Metadata
   getCapabilityStatement,
   helpers: {

@@ -106,6 +106,10 @@ export async function createComposition(resource: any): Promise<FhirResponse> {
   return post<FhirResponse>('/fhir/composition', { resource });
 }
 
+export async function createPractitioner(resource: any): Promise<FhirResponse> {
+  return post<FhirResponse>('/fhir/practitioner', { resource });
+}
+
 // ==================== READ OPERATIONS ====================
 
 export async function getPatient(id: string): Promise<FhirResponse> {
@@ -134,6 +138,10 @@ export async function getObservation(id: string): Promise<FhirResponse> {
 
 export async function getComposition(id: string): Promise<FhirResponse> {
   return get<FhirResponse>(`/fhir/composition/${id}`);
+}
+
+export async function getPractitioner(id: string): Promise<FhirResponse> {
+  return get<FhirResponse>(`/fhir/practitioner/${id}`);
 }
 
 // ==================== UPDATE OPERATIONS ====================
@@ -166,6 +174,10 @@ export async function updateComposition(id: string, resource: any): Promise<Fhir
   return put<FhirResponse>(`/fhir/composition/${id}`, { resource });
 }
 
+export async function updatePractitioner(id: string, resource: any): Promise<FhirResponse> {
+  return put<FhirResponse>(`/fhir/practitioner/${id}`, { resource });
+}
+
 // ==================== DELETE OPERATIONS ====================
 
 export async function deletePatient(id: string): Promise<{ success: boolean; message: string }> {
@@ -194,6 +206,10 @@ export async function deleteObservation(id: string): Promise<{ success: boolean;
 
 export async function deleteComposition(id: string): Promise<{ success: boolean; message: string }> {
   return del<{ success: boolean; message: string }>(`/fhir/composition/${id}`);
+}
+
+export async function deletePractitioner(id: string): Promise<{ success: boolean; message: string }> {
+  return del<{ success: boolean; message: string }>(`/fhir/practitioner/${id}`);
 }
 
 // ==================== SEARCH OPERATIONS ====================
@@ -245,6 +261,13 @@ export async function searchCompositions(params: Record<string, string>): Promis
     .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
     .join('&');
   return get<FhirBundleResponse>(`/fhir/composition?${queryString}`);
+}
+
+export async function searchPractitioners(params: Record<string, string>): Promise<FhirBundleResponse> {
+  const queryString = Object.entries(params)
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join('&');
+  return get<FhirBundleResponse>(`/fhir/practitioner?${queryString}`);
 }
 
 // ==================== METADATA ====================

@@ -3816,6 +3816,78 @@ app.get('/api/fhir/composition', async (req, res) => {
   }
 });
 
+// ==================== FHIR PRACTITIONER OPERATIONS ====================
+
+app.post('/api/fhir/practitioner', async (req, res) => {
+  const { resource } = req.body || {};
+  if (!resource) {
+    return res.status(400).json({ error: 'Falta el recurso Practitioner' });
+  }
+  try {
+    const response = await fhirClient.createPractitioner(resource);
+    res.json({ success: true, resource: response });
+  } catch (error) {
+    console.error('❌ [FHIR] Error creando Practitioner:', error);
+    res.status(500).json({ error: 'Error enviando Practitioner a FHIR', details: error.message });
+  }
+});
+
+app.get('/api/fhir/practitioner/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const response = await fhirClient.readPractitioner(id);
+    res.json({ success: true, resource: response });
+  } catch (error) {
+    console.error('❌ [FHIR] Error leyendo Practitioner:', error);
+    if (error.message.includes('404')) {
+      res.status(404).json({ error: 'Practitioner no encontrado', details: error.message });
+    } else {
+      res.status(500).json({ error: 'Error leyendo Practitioner desde FHIR', details: error.message });
+    }
+  }
+});
+
+app.put('/api/fhir/practitioner/:id', async (req, res) => {
+  const { resource } = req.body || {};
+  if (!resource) {
+    return res.status(400).json({ error: 'Falta el recurso Practitioner' });
+  }
+  try {
+    const { id } = req.params;
+    const response = await fhirClient.updatePractitioner(id, resource);
+    res.json({ success: true, resource: response });
+  } catch (error) {
+    console.error('❌ [FHIR] Error actualizando Practitioner:', error);
+    res.status(500).json({ error: 'Error actualizando Practitioner en FHIR', details: error.message });
+  }
+});
+
+app.delete('/api/fhir/practitioner/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await fhirClient.deletePractitioner(id);
+    res.json({ success: true, message: 'Practitioner eliminado correctamente' });
+  } catch (error) {
+    console.error('❌ [FHIR] Error eliminando Practitioner:', error);
+    if (error.message.includes('404')) {
+      res.status(404).json({ error: 'Practitioner no encontrado', details: error.message });
+    } else {
+      res.status(500).json({ error: 'Error eliminando Practitioner desde FHIR', details: error.message });
+    }
+  }
+});
+
+app.get('/api/fhir/practitioner', async (req, res) => {
+  try {
+    const queryParams = req.query;
+    const response = await fhirClient.searchPractitioners(queryParams);
+    res.json({ success: true, bundle: response });
+  } catch (error) {
+    console.error('❌ [FHIR] Error buscando Practitioners:', error);
+    res.status(500).json({ error: 'Error buscando Practitioners en FHIR', details: error.message });
+  }
+});
+
 // ==================== FHIR METADATA ====================
 
 app.get('/api/fhir/metadata', async (req, res) => {
