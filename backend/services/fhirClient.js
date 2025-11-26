@@ -100,7 +100,14 @@ async function upsertPatient(patientResource, identifierValue) {
   }
 
   if (identifierValue) {
-    const sanitizedId = identifierValue.replace(/[^A-Za-z0-9\-]/g, '');
+    let sanitizedId = String(identifierValue).replace(/[^A-Za-z0-9\-]/g, '');
+    
+    // HAPI FHIR requiere que los IDs asignados por el cliente tengan al menos un carácter no numérico
+    // Si el ID es puramente numérico, agregamos un prefijo
+    if (/^\d+$/.test(sanitizedId)) {
+      sanitizedId = `id-${sanitizedId}`;
+    }
+    
     return fhirRequest('PUT', 'Patient', { ...patientResource, id: sanitizedId }, sanitizedId);
   }
 
